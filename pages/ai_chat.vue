@@ -3563,66 +3563,7 @@ const getPlugins = (id: any) => {
 };
 const actions = counter.setting.APP_URL + "/api/upload_model";
 
-// const beforeUpload = (file: any) => {
-//   const isJPG = file.type === "image/jpeg";
-//   const isPNG = file.type === "image/png";
-//   const ifPDF = file.type === "application/pdf";
-//   // 以下文件均可'doc','docx','xls','xlsx','ppt','pptx','txt'
-//   const isWord = file.type === "application/msword";
-//   const isWord2 =
-//     file.type ===
-//     "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-//   const isLt2M = file.size / 1024 / 1024 < 15;
-
-//   if (
-//     !isJPG &&
-//     !isPNG &&
-//     !ifPDF &&
-//     !isWord &&
-//     !isWord2 &&
-//     !isExcel &&
-//     !isExcel2 &&
-//     !isPPT
-//   ) {
-//     Message.error("上传图片只能是 JPG/PNG/PDF/Word 格式!");
-//     return false;
-//   }
-//   if (!isLt2M) {
-//     Message.error("上传文件大小不能超过 15MB!");
-//     return false;
-//   }
-//   return true;
-// };
-// const text_imageUrl = ref("");
-// const TextSuccess = (currentFile: any) => {
-//   // 获取currentFile里的response的data值
-//   if (currentFile.response.status != 200) {
-//     Message.error("上传失败!");
-//     return;
-//   }
-//   Message.success("上传成功!");
-//   if (plugins_select.value == "image_read") {
-//     text_imageUrl.value = currentFile.response.data;
-//     ruleForm.message_input = "这张图片是什么？";
-//   } else {
-//     text_imageUrl.value = currentFile.response.data;
-//   }
-// };
-
 const text_imageUrls = ref([]);
-
-// const TextSuccess = (currentFile: any) => {
-//   if (currentFile.response.status !== 200) {
-//     Message.error("上传失败!");
-//     return;
-//   }
-//   Message.success("上传成功!");
-//   text_imageUrls.value.push(currentFile.response.data);
-//   if (plugins_select.value === "image_read") {
-//     ruleForm.message_input = "这些图片是什么？"; // Adjust message for multiple images
-//   }
-// };
 
 const TextSuccess = (currentFile: any) => {
   if (currentFile.response.status !== 200) {
@@ -3770,17 +3711,6 @@ const selectedModels = ref([]);
 const userinfo2 = useCookie("user_info");
 const userId = computed(() => userinfo2.value?.id || null);
 
-// Function to toggle multi-window (for manual mode)
-// const openMultiWindow = (count) => {
-//   if (!token.value) {
-//     showLoginModal.value = true;
-//     return;
-//   }
-//   selectionType.value = count; // Set 2 or 4
-//   showModelSelectionModal.value = true; // Show selection modal
-//   console.log(showModelSelectionModal.value);
-// };
-
 const openMultiWindow = (count) => {
   if (!token.value) {
     showLoginModal.value = true;
@@ -3789,52 +3719,6 @@ const openMultiWindow = (count) => {
   selectionType.value = count;
   showModelSelectionModal.value = true;
 };
-// Handle model selection confirmation
-// const handleModelSelection = (selected) => {
-//   selectedModels.value = selected;
-//   showModelSelectionModal.value = false;
-//   showMultiWindow.value = true; // Show multi-window with selected models
-// };
-
-// const handleModelSelection = (selected) => {
-//   if (!Array.isArray(selected)) {
-//     console.error("Invalid selection from modal:", selected);
-//     selectedModels.value = [];
-//   } else {
-//     selectedModels.value = selected;
-//     // Lock the mode after selection
-//   }
-//   showModelSelectionModal.value = false;
-//   showMultiWindow.value = true;
-// };
-
-// const handleModelSelection = (selected) => {
-//   if (!Array.isArray(selected)) {
-//     console.error("Invalid selection from modal:", selected);
-//     selectedModels.value = [];
-//   } else {
-//     selectedModels.value = selected;
-//     const newSessionId = `sess_${Date.now()}_${Math.random()
-//       .toString(36)
-//       .substr(2, 5)}`;
-//     add_chat({ is_multi: true, session_id: newSessionId }).then((res) => {
-//       ms_active.value = newSessionId;
-//       showMultiWindow.value = true;
-
-//       // Call all_message() once to update the sidebar
-//       all_message().then(() => {
-//         if (messages.value.some((msg) => msg.session_id == newSessionId)) {
-//           console.log("New multi-window chat found in sidebar:", newSessionId);
-//         } else {
-//           console.warn(
-//             `New multi-window chat (session ID: ${newSessionId}) not found in sidebar. Please refresh the page or check the backend response.`
-//           );
-//         }
-//       });
-//     });
-//   }
-//   showModelSelectionModal.value = false;
-// };
 
 const handleModelSelection = (selected) => {
   if (!Array.isArray(selected)) {
@@ -3864,54 +3748,6 @@ const saveEdit = (item) => {
   updateMessage(item); // Call function to save changes
 };
 
-// const updateMessage = async (item) => {
-//   try {
-//     // Ensure token exists
-//     if (!token.value) {
-//       Message.error("Please log in to update messages");
-//       item.isEditing = false; // Exit editing mode
-//       item.editedMessage = item.message; // Revert changes
-//       login_dialog_click(); // Prompt login
-//       return;
-//     }
-
-//     // Prepare the request
-//     const response = await fetch(`${window.APP_CONFIG.baseUrl}update_message`, {
-//       method: "POST",
-//       headers: {
-//         Authorization: `Bearer ${token.value}`,
-//         "Content-Type": "application/json",
-//         Accept: "application/json",
-//       },
-//       body: JSON.stringify({
-//         message_id: item.id,
-//         message: item.editedMessage.trim(), // Trim to avoid unnecessary whitespace
-//       }),
-//     });
-
-//     // Check response status
-//     if (response.ok) {
-//       const result = await response.json();
-//       if (result.status === 200) {
-//         item.message = item.editedMessage; // Update the original message
-//         item.isEditing = false; // Exit editing mode
-//         Message.success(result.message || "Message updated successfully");
-
-//         // Optionally refresh the message list if needed
-//         await check_message(ms_active.value); // Sync with backend
-//       } else {
-//         throw new Error(result.message || "Failed to update message");
-//       }
-//     } else {
-//       const errorData = await response.json();
-//       throw new Error(errorData.message || `Server error: ${response.status}`);
-//     }
-//   } catch (error) {
-//     Message.error(`Error updating message: ${error.message}`);
-//     item.editedMessage = item.message; // Revert to original message on failure
-//     item.isEditing = false; // Exit editing mode
-//   }
-// };
 const updateMessage = async (item) => {
   try {
     // Ensure token exists
@@ -3974,7 +3810,6 @@ const updateMessage = async (item) => {
   }
 };
 
-// Send to single chat (existing logic)
 // const sendToSingleChat = (text) => {
 //   if (!text.trim()) return;
 //   send_loading.value = true;
@@ -4061,7 +3896,7 @@ const loadChatSession = (sessionId, isMultiWindow, models, windowCount) => {
     all_message(); // Refresh sidebar to update title and latest message
   }
 };
-//before empty bug
+
 // const loadChatSession = (sessionId, isMultiWindow, models, windowCount) => {
 //   console.log("Loading session:", {
 //     sessionId,
@@ -4389,7 +4224,7 @@ const deleteMessage = (id) => {
 
 const last_msg = ref(0);
 const last_draw = ref(0);
-// 请求左侧列表
+
 // const all_message = () => {
 //   left_loding.value = true;
 //   data_load.value = true;
@@ -4740,7 +4575,6 @@ const handleSizeChange = (val: number) => {
     });
 };
 
-// 单独请求聊天记录 // check_message
 // const check_message = (id) => {
 //   ms_active.value = String(id); // Ensure it's a string
 //   return new Promise((resolve, reject) => {
@@ -5051,7 +4885,6 @@ const add_new_chat = async () => {
   }
 };
 
-// const add_new_chat = async () => {
 //   try {
 //     const tempSessionId = `temp_sess_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
 //     ms_active.value = tempSessionId;
@@ -5207,7 +5040,7 @@ const refresh_answer = (qs: any) => {
 };
 const contentString = ref("");
 const activeSession = useCookie("active_session");
-// const submitForm = async () => {
+
 //   if (!ruleForm.message_input.trim() && !text_imageUrls.value.length) {
 //     Message.warning("Please enter content or upload images");
 //     return false;
@@ -6043,7 +5876,7 @@ const resetForm = (formEl: FormInstance | undefined) => {
   if (!formEl) return;
   formEl.resetFields();
 };
-// const check_sub = () => {
+
 //   const message = ruleForm.message_input.trim();
 //   if (!message) {
 //     Message.warning("请输入内容");

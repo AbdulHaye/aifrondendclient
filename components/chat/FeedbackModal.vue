@@ -38,7 +38,9 @@
           </svg>
         </div>
         <h2 class="text-lg font-semibold text-gray-800">
-          {{ feedbackType === "positive" ? "Positive Feedback" : "Report Issue" }}
+          {{
+            feedbackType === "positive" ? "Positive Feedback" : "Report Issue"
+          }}
         </h2>
       </div>
 
@@ -83,7 +85,8 @@
           </div>
 
           <p class="text-xs text-gray-500 leading-relaxed">
-            Submitting this report will send the conversation to the support team.
+            Submitting this report will send the conversation to the support
+            team.
             <a href="#" class="text-blue-500 hover:text-blue-600 underline"
               >Learn More →</a
             >

@@ -506,6 +506,58 @@
                         </template>
                         下载
                       </a-button>
+                      <a-button
+                        type="primary"
+                        round
+                        class="button"
+                        @click="handleThumbsUp(now_video.video_id)"
+                      >
+                        <template #icon>
+                          <svg
+                            class="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017
+                c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095
+                c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2
+                M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
+                            />
+                          </svg>
+                        </template>
+                      </a-button>
+                      <a-button
+                        type="primary"
+                        round
+                        class="button"
+                        @click="handleThumbsDown(now_video.video_id)"
+                      >
+                        <template #icon>
+                          <svg
+                            class="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <g transform="rotate(180 12 12)">
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017
+                  c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095
+                  c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2
+                  M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
+                              />
+                            </g>
+                          </svg>
+                        </template>
+                      </a-button>
                       <a-popconfirm
                         content="确定删除吗？"
                         type="warning"
@@ -649,6 +701,54 @@
                       >
                         进度: {{ m.progress }}%
                       </p>
+                    </div>
+                    <!-- Button Container -->
+                    <div class="flex justify-center gap-2 mt-2">
+                      <button
+                        class="chat-tool-btn"
+                        @click="handleThumbsUp(m.video_id)"
+                      >
+                        <div class="sign">
+                          <svg
+                            class="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
+                            />
+                          </svg>
+                        </div>
+                        <div class="text">好评</div>
+                      </button>
+                      <!-- Thumbs Down Button -->
+                      <button
+                        class="chat-tool-btn"
+                        @click="handleThumbsDown(m.video_id)"
+                      >
+                        <div class="sign">
+                          <svg
+                            class="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <g transform="rotate(180 12 12)">
+                              <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"
+                              />
+                            </g>
+                          </svg>
+                        </div>
+                        <div class="text">差评</div>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1069,6 +1169,15 @@
         </div>
       </template>
     </a-drawer>
+
+    <FeedbackModal
+      :is-open="isFeedbackModalOpen"
+      :feedback-type="feedbackType"
+      :reportable-id="selectedReportableId"
+      :model-key="modelKey"
+      @close="closeFeedbackModal"
+      @submit="handleFeedbackSubmit"
+    />
   </div>
 </template>
 
@@ -1077,6 +1186,9 @@ import { Message } from "@arco-design/web-vue";
 import { useCounter } from "~/store/counter";
 import { IconDelete, IconPlus } from "@arco-design/web-vue/es/icon";
 import { ref } from "vue";
+import { useCookie } from "nuxt/app";
+import FeedbackModal from "~/components/chat/FeedbackModal.vue";
+import { submitMessageReport } from "~/api/api";
 import {
   get_video_list,
   music_delete,
@@ -1185,6 +1297,70 @@ const ai_generate_chatglm = () => {
 const timer = ref(null) as any;
 const allTimer = ref(null) as any;
 const is_sc = ref(false);
+
+const modelKey = ref("ai_ppt");
+const isFeedbackModalOpen = ref(false);
+const feedbackType = ref("");
+const selectedReportableId = ref(null);
+const userid2 = useCookie("user_info");
+const userId = userid2.value?.id || null;
+// // Handle Thumbs Up
+// const handleThumbsUp = (id) => {
+//   selectedMessageId.value = id;
+//   feedbackType.value = "positive";
+//   isFeedbackModalOpen.value = true;
+// }
+const handleThumbsUp = (id) => {
+  // if (!item?.id) {
+  //   console.error('No ID found for feedback item');
+  //   return;
+  // }
+  selectedReportableId.value = id;
+  feedbackType.value = "positive";
+  isFeedbackModalOpen.value = true;
+};
+// Handle Thumbs Down
+const handleThumbsDown = (id) => {
+  selectedReportableId.value = id;
+  feedbackType.value = "negative";
+  isFeedbackModalOpen.value = true;
+};
+// Close Feedback Modal
+const closeFeedbackModal = () => {
+  isFeedbackModalOpen.value = false;
+  selectedReportableId.value = null;
+  feedbackType.value = "";
+};
+
+const handleFeedbackSubmit = async (data) => {
+  try {
+    const reportData = {
+      reportable_id: selectedReportableId.value,
+      reportable_type: "pptGeneration",
+      ai_function: "ppt_generate",
+      user_id: userId || null,
+      report_type: data.type,
+      issue_category: data.issueType || null,
+      reason: data.text || "No reason provided",
+    };
+    console.log(
+      "Submitting feedback with payload:",
+      JSON.stringify(reportData, null, 2)
+    );
+    const response = await submitMessageReport(reportData);
+    if (response.success) {
+      alert("Feedback submitted successfully");
+      console.log("Feedback response:", response);
+      // emit('feedback', reportData);
+    } else {
+      throw new Error(response.error || "Failed to submit feedback");
+    }
+  } catch (error) {
+    console.error("Error submitting feedback:", error);
+    alert("Failed to submit feedback: " + error.message);
+  }
+  closeFeedbackModal();
+};
 
 const check_task = (video_id: any) => {
   video_check({
