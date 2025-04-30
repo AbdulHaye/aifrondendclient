@@ -3290,102 +3290,102 @@ const handleFeedbackSubmit = async (data) => {
 //   typeNextSegment();
 // };
 
-const typewriterEffect = (index: number) => {
-  const fullMessage = me_message.value[index].fullMessage;
-  if (me_message.value[index].isTyping) return; // Prevent multiple typewriter effects
-  me_message.value[index].isTyping = true;
+// const typewriterEffect = (index: number) => {
+//   const fullMessage = me_message.value[index].fullMessage;
+//   if (me_message.value[index].isTyping) return; // Prevent multiple typewriter effects
+//   me_message.value[index].isTyping = true;
 
-  me_message.value[index].isCode = false;
-  me_message.value[index].codeSegments = [];
-  me_message.value[index].textSegments = [];
+//   me_message.value[index].isCode = false;
+//   me_message.value[index].codeSegments = [];
+//   me_message.value[index].textSegments = [];
 
-  // Split the message into segments (code blocks and plain text)
-  const codeBlockRegex = /```[\s\S]*?```/g;
-  let codeBlocks = [];
-  let lastIndex = 0;
-  let match;
+//   // Split the message into segments (code blocks and plain text)
+//   const codeBlockRegex = /```[\s\S]*?```/g;
+//   let codeBlocks = [];
+//   let lastIndex = 0;
+//   let match;
 
-  while ((match = codeBlockRegex.exec(fullMessage)) !== null) {
-    const start = match.index;
-    const end = codeBlockRegex.lastIndex;
-    const codeContent = match[0].replace(/^```|```$/g, "").trim();
-    codeBlocks.push({
-      start,
-      end,
-      content: codeContent,
-      textBefore: fullMessage.slice(lastIndex, start),
-    });
-    lastIndex = end;
-  }
+//   while ((match = codeBlockRegex.exec(fullMessage)) !== null) {
+//     const start = match.index;
+//     const end = codeBlockRegex.lastIndex;
+//     const codeContent = match[0].replace(/^```|```$/g, "").trim();
+//     codeBlocks.push({
+//       start,
+//       end,
+//       content: codeContent,
+//       textBefore: fullMessage.slice(lastIndex, start),
+//     });
+//     lastIndex = end;
+//   }
 
-  if (codeBlocks.length === 0) {
-    codeBlocks.push({
-      start: 0,
-      end: fullMessage.length,
-      content: fullMessage,
-      textBefore: "",
-      isPlainText: true,
-    });
-  } else if (lastIndex < fullMessage.length) {
-    codeBlocks.push({
-      start: lastIndex,
-      end: fullMessage.length,
-      content: fullMessage.slice(lastIndex),
-      textBefore: "",
-      isPlainText: true,
-    });
-  }
+//   if (codeBlocks.length === 0) {
+//     codeBlocks.push({
+//       start: 0,
+//       end: fullMessage.length,
+//       content: fullMessage,
+//       textBefore: "",
+//       isPlainText: true,
+//     });
+//   } else if (lastIndex < fullMessage.length) {
+//     codeBlocks.push({
+//       start: lastIndex,
+//       end: fullMessage.length,
+//       content: fullMessage.slice(lastIndex),
+//       textBefore: "",
+//       isPlainText: true,
+//     });
+//   }
 
-  let currentSegment = 0;
+//   let currentSegment = 0;
 
-  const typeNextSegment = () => {
-    if (currentSegment >= codeBlocks.length) {
-      messageObj.isTyping = false;
-      messageObj.isComplete = true;
-      // me_message.value[index].isComplete = true;
-      // me_message.value[index].isTyping = false;
-      down_message();
-      return;
-    }
+//   const typeNextSegment = () => {
+//     if (currentSegment >= codeBlocks.length) {
+//       messageObj.isTyping = false;
+//       messageObj.isComplete = true;
+//       // me_message.value[index].isComplete = true;
+//       // me_message.value[index].isTyping = false;
+//       down_message();
+//       return;
+//     }
 
-    const segment = codeBlocks[currentSegment];
-    const isCodeBlock = !segment.isPlainText;
-    me_message.value[index].isCode = isCodeBlock;
+//     const segment = codeBlocks[currentSegment];
+//     const isCodeBlock = !segment.isPlainText;
+//     me_message.value[index].isCode = isCodeBlock;
 
-    if (isCodeBlock) {
-      // Display code blocks instantly
-      me_message.value[index].codeSegments[currentSegment] = segment.content;
-      me_message.value[index].textSegments[currentSegment] = segment.textBefore;
-      currentSegment++;
-      setTimeout(typeNextSegment, 0); // Move to next segment immediately
-    } else {
-      // Type plain text word by word
-      const words = segment.content.split(" ");
-      let wordIndex = 0;
-      me_message.value[index].textSegments[currentSegment] = segment.textBefore;
-      me_message.value[index].codeSegments[currentSegment] = "";
+//     if (isCodeBlock) {
+//       // Display code blocks instantly
+//       me_message.value[index].codeSegments[currentSegment] = segment.content;
+//       me_message.value[index].textSegments[currentSegment] = segment.textBefore;
+//       currentSegment++;
+//       setTimeout(typeNextSegment, 0); // Move to next segment immediately
+//     } else {
+//       // Type plain text word by word
+//       const words = segment.content.split(" ");
+//       let wordIndex = 0;
+//       me_message.value[index].textSegments[currentSegment] = segment.textBefore;
+//       me_message.value[index].codeSegments[currentSegment] = "";
 
-      const typeWord = () => {
-        if (wordIndex < words.length) {
-          const currentText =
-            me_message.value[index].textSegments[currentSegment];
-          me_message.value[index].textSegments[currentSegment] =
-            currentText + (currentText ? " " : "") + words[wordIndex];
-          me_message.value[index].message =
-            me_message.value[index].textSegments[currentSegment];
-          wordIndex++;
-          setTimeout(typeWord, 100); // 100ms per word for faster typing
-        } else {
-          currentSegment++;
-          typeNextSegment();
-        }
-      };
-      typeWord();
-    }
-  };
+//       const typeWord = () => {
+//         if (wordIndex < words.length) {
+//           const currentText =
+//             me_message.value[index].textSegments[currentSegment];
+//           me_message.value[index].textSegments[currentSegment] =
+//             currentText + (currentText ? " " : "") + words[wordIndex];
+//           me_message.value[index].message =
+//             me_message.value[index].textSegments[currentSegment];
+//           wordIndex++;
+//           setTimeout(typeWord, 100); // 100ms per word for faster typing
+//         } else {
+//           currentSegment++;
+//           typeNextSegment();
+//         }
+//       };
+//       typeWord();
+//     }
+//   };
 
-  typeNextSegment();
-};
+//   typeNextSegment();
+// };
 const voice_list = ref(false);
 const voice_list_arr = ref([]);
 const voice_page = ref(1);
@@ -5433,6 +5433,8 @@ const pollForResponse = (messageId) => {
           if (data.message.status === "completed") {
             me_message.value[messageIndex].isThinking = false;
             me_message.value[messageIndex].fullMessage = data.message.message;
+            me_message.value[messageIndex].thinkProcess =
+              data.message.think_content || "";
             me_message.value[messageIndex].qs_token =
               data.message.qs_token || 0;
             me_message.value[messageIndex].answer_token =
@@ -5443,7 +5445,6 @@ const pollForResponse = (messageId) => {
             text_imageUrls.value = [];
             get_limit();
             clearInterval(pollingInterval);
-            // await all_message();
           } else if (data.message.status === "failed") {
             me_message.value[messageIndex].isThinking = false;
             me_message.value[messageIndex].message = "Processing failed";
@@ -5451,13 +5452,6 @@ const pollForResponse = (messageId) => {
             clearInterval(pollingInterval);
           }
         }
-      } else if (res.status === 404) {
-        console.error("Message not found:", messageId);
-        me_message.value.find((m) => m.id === messageId).isThinking = false;
-        me_message.value.find((m) => m.id === messageId).message =
-          "Message not found";
-        send_loading.value = false;
-        clearInterval(pollingInterval);
       }
     } catch (error) {
       console.error("Polling error:", error);
@@ -5466,6 +5460,108 @@ const pollForResponse = (messageId) => {
 
   const pollingInterval = setInterval(checkResponse, 200);
 };
+
+const typewriterEffect = (index: number) => {
+  const fullMessage = me_message.value[index].fullMessage;
+  const thinkProcess = me_message.value[index].thinkProcess || "";
+  if (me_message.value[index].isTyping) return;
+  me_message.value[index].isTyping = true;
+
+  me_message.value[index].isCode = false;
+  me_message.value[index].codeSegments = [];
+  me_message.value[index].textSegments = [];
+
+  const codeBlockRegex = /```[\s\S]*?```/g;
+  let codeBlocks = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = codeBlockRegex.exec(fullMessage)) !== null) {
+    const start = match.index;
+    const end = codeBlockRegex.lastIndex;
+    const codeContent = match[0].replace(/^```|```$/g, "").trim();
+    codeBlocks.push({
+      start,
+      end,
+      content: codeContent,
+      textBefore: fullMessage.slice(lastIndex, start),
+    });
+    lastIndex = end;
+  }
+
+  if (codeBlocks.length === 0) {
+    codeBlocks.push({
+      start: 0,
+      end: fullMessage.length,
+      content: fullMessage,
+      textBefore: "",
+      isPlainText: true,
+    });
+  } else if (lastIndex < fullMessage.length) {
+    codeBlocks.push({
+      start: lastIndex,
+      end: fullMessage.length,
+      content: fullMessage.slice(lastIndex),
+      textBefore: "",
+      isPlainText: true,
+    });
+  }
+
+  let currentSegment = 0;
+  const typeNextSegment = () => {
+    if (currentSegment >= codeBlocks.length + (thinkProcess ? 1 : 0)) {
+      me_message.value[index].isComplete = true;
+      me_message.value[index].isTyping = false;
+      down_message();
+      return;
+    }
+
+    if (currentSegment === codeBlocks.length && thinkProcess) {
+      me_message.value[index].textSegments.push(thinkProcess);
+      me_message.value[index].codeSegments.push("");
+      currentSegment++;
+      setTimeout(typeNextSegment, 0);
+    } else {
+      const segment = codeBlocks[currentSegment];
+      const isCodeBlock = !segment.isPlainText;
+      me_message.value[index].isCode = isCodeBlock;
+
+      if (isCodeBlock) {
+        me_message.value[index].codeSegments[currentSegment] = segment.content;
+        me_message.value[index].textSegments[currentSegment] =
+          segment.textBefore;
+        currentSegment++;
+        setTimeout(typeNextSegment, 0);
+      } else {
+        const words = segment.content.split(" ");
+        let wordIndex = 0;
+        me_message.value[index].textSegments[currentSegment] =
+          segment.textBefore;
+        me_message.value[index].codeSegments[currentSegment] = "";
+
+        const typeWord = () => {
+          if (wordIndex < words.length) {
+            const currentText =
+              me_message.value[index].textSegments[currentSegment];
+            me_message.value[index].textSegments[currentSegment] =
+              currentText + (currentText ? " " : "") + words[wordIndex];
+            me_message.value[index].message =
+              me_message.value[index].textSegments[currentSegment];
+            wordIndex++;
+            setTimeout(typeWord, 100);
+          } else {
+            currentSegment++;
+            typeNextSegment();
+          }
+        };
+        typeWord();
+      }
+    }
+  };
+
+  typeNextSegment();
+};
+
 const cookie_message = useCookie("message");
 if (counter.setting.no_login_aiqs == "1" && !token.value) {
   if (cookie_message.value) {
