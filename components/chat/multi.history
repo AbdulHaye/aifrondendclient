@@ -1,0 +1,256 @@
+<template>
+  <div class="flex flex-col h-full bg-transparent">
+    <div class="flex-1 flex overflow-hidden bg-white rounded-lg">
+      <div
+        v-if="isReady"
+        class="w-full grid gap-4 overflow-hidden transition-all duration-300"
+        :class="[
+          focusedModel
+            ? 'grid-cols-1' // Single column when focused
+            : selectedModels.length === 2
+            ? 'grid-cols-2'
+            : 'grid-cols-2 grid-rows-2',
+        ]"
+        style="grid-auto-rows: 1fr"
+      >
+        <ModelChat
+          v-for="model in selectedModels"
+          :key="model.model_key"
+          :model="model.model_name"
+          :messages="state.messages[model.model_key] || []"
+          :avatar="state.avatar"
+          :speak-is-audio="speakIsAudio"
+          @click="setFocusedModel(model.model_key)"
+          @feedback="handleFeedback"
+          @toggle-speak="toggleSpeak"
+          @refresh-answer="refreshAnswer"
+          @export-word="exportWord"
+          @export-pdf="exportPdf"
+          @delete="deleteMessage"
+          :class="{ hidden: focusedModel && focusedModel !== model.model_key }"
+        />
+      </div>
+      <div v-else class="flex-1 flex items-center justify-center text-gray-500">
+        Loading models...
+      </div>
+    </div>
+    <div class="p-2 flex justify-center gap-2">
+      <button
+        v-if="focusedModel"
+        class="bg-blue-500 text-white rounded px-4 py-2 hover:bg-blue-600 transition-colors z-10 flex items-center gap-2"
+        @click="clearFocusedModel"
+        aria-label="Back to Multi-Window View"
+      >
+        Back to Multi-Window View
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import {
+  ref,
+  reactive,
+  onMounted,
+  onBeforeUnmount,
+  nextTick,
+  watch,
+} from "vue";
+import ModelChat from "./ModelChat.vue";
+import { submitReport } from "~/api/api";
+
+const WS_URL = "wss://abdul.synthetixor.com/ws";
+
+// Define props
+const { selectedModels, userId, speakIsAudio } = defineProps({
+  selectedModels: { type: Array, required: true, default: () => [] },
+  userId: { type: [String, Number], default: null },
+  speakIsAudio: { type: Boolean, default: false },
+});
+
+// Define emits
+const emit = defineEmits([
+  "toggle-speak",
+  "refresh-answer",
+  "export-word",
+  "export-pdf",
+  "delete-message",
+  "feedback",
+  "close",
+]);
+
+// Reactive state and refs
+const focusedModel = ref(null);
+const isReady = ref(false);
+const state = reactive({
+  messages: {},
+  avatar:
+    "https://kdkhvabm.synthetixor.com/images/202501/22/qYID1kyTI0IOhwQOXeYR85jOl4JzZfJ5fCqPWH1D.png",
+  chatSocket: null,
+});
+
+// Initialize messages for models on mount
+onMounted(async () => {
+  if (!Array.isArray(selectedModels) || selectedModels.length === 0) {
+    console.error("Invalid selectedModels:", selectedModels);
+    return;
+  }
+
+  initializeMessages(selectedModels);
+  await nextTick();
+  isReady.value = true;
+  connectWebSocket();
+});
+
+// Clean up WebSocket on unmount
+onBeforeUnmount(() => {
+  if (state.chatSocket) state.chatSocket.close();
+});
+
+// Watch for changes in selectedModels to update messages
+watch(
+  () => selectedModels,
+  (newModels) => {
+    if (!Array.isArray(newModels)) {
+      console.error("Invalid new selectedModels:", newModels);
+      return;
+    }
+    initializeMessages(newModels);
+  },
+  { deep: true } // Deep watch to detect changes in array contents
+);
+
+// Helper function to initialize messages for a list of models
+const initializeMessages = (models) => {
+  models.forEach((model) => {
+    const modelKey = model.model_key;
+    if (!state.messages[modelKey]) {
+      state.messages[modelKey] = [
+        {
+          id: `init_${modelKey}_${Date.now()}`,
+          text: `Hello! I'm ${model.model_name}, how can I assist you?`,
+          isUser: false,
+          timestamp: new Date(),
+        },
+      ];
+    }
+  });
+};
+
+// Generate unique message IDs
+const generateMessageId = (prefix = "msg") =>
+  `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+
+// Establish WebSocket connection
+const connectWebSocket = () => {
+  const chatSocket = new WebSocket(WS_URL);
+  chatSocket.onopen = () => console.log("WebSocket connected");
+  chatSocket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === "message") {
+      const modelKey = message.model;
+      if (state.messages[modelKey]) {
+        state.messages[modelKey] = state.messages[modelKey].filter(
+          (msg) => !msg.isThinking
+        );
+        state.messages[modelKey].push({
+          id: message.message_id || generateMessageId("ai"),
+          text: message.text,
+          isUser: false,
+          isThinking: false,
+          timestamp: new Date(),
+          sessionId: message.session_id || null,
+        });
+      } else {
+        console.warn(`Received message for uninitialized model: ${modelKey}`);
+      }
+    }
+  };
+  chatSocket.onerror = (error) => console.error("WebSocket error:", error);
+  chatSocket.onclose = () => console.log("WebSocket closed");
+  state.chatSocket = chatSocket;
+};
+
+// Send message to all selected models
+const sendMessage = (text) => {
+  if (
+    !text?.trim() ||
+    !state.chatSocket ||
+    state.chatSocket.readyState !== WebSocket.OPEN
+  ) {
+    console.warn("Cannot send message: WebSocket not ready or text empty");
+    return;
+  }
+  const sessionId = generateMessageId("sess");
+  selectedModels.forEach((model) => {
+    const modelKey = model.model_key;
+    sendToModel(text, modelKey, sessionId);
+  });
+};
+
+// Send message to a specific model
+const sendToModel = (text, modelKey, sessionId) => {
+  // Ensure messages array exists for the model
+  if (!state.messages[modelKey]) {
+    state.messages[modelKey] = [];
+  }
+  state.messages[modelKey].push(
+    {
+      id: generateMessageId("user"),
+      text,
+      isUser: true,
+      timestamp: new Date(),
+    },
+    {
+      id: generateMessageId("thinking"),
+      text: "Thinking...",
+      isUser: false,
+      isThinking: true,
+      timestamp: new Date(),
+      sessionId,
+    }
+  );
+  state.chatSocket.send(
+    JSON.stringify({
+      messages: [{ role: "user", content: text }],
+      model: modelKey,
+      userId: userId,
+      session_id: sessionId,
+    })
+  );
+};
+
+// Focus-related functions
+const setFocusedModel = (modelKey) => {
+  focusedModel.value = modelKey;
+};
+
+const clearFocusedModel = () => {
+  focusedModel.value = null;
+};
+
+// Event handlers
+const toggleSpeak = (text) => emit("toggle-speak", text);
+const refreshAnswer = (question) => emit("refresh-answer", question);
+const exportWord = (text) => emit("export-word", text);
+const exportPdf = (text) => emit("export-pdf", text);
+const deleteMessage = (messageId) => emit("delete-message", messageId);
+const handleFeedback = (data) => emit("feedback", data);
+
+// Expose sendMessage to parent
+defineExpose({
+  sendMessage,
+});
+</script>
+
+<style scoped>
+.grid > div {
+  @apply border border-gray-200 rounded-md;
+}
+.hidden {
+  @apply opacity-0 pointer-events-none absolute; /* Ensure it’s removed from layout */
+}
+.grid {
+  @apply w-full h-full; /* Ensure grid takes full space */
+}
+</style>

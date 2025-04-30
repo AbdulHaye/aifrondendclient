@@ -1,0 +1,28 @@
+// ~/store/counter.ts
+import { defineStore } from "pinia";
+
+interface CounterState {
+  setting: any;
+}
+
+export const useCounter = defineStore("counter", {
+  state: (): CounterState => ({
+    setting: {},
+  }),
+  actions: {
+    increment() {
+      // Example action, adjust as needed
+      this.setting = { ...this.setting }; // Ensure reactivity
+    },
+  },
+  getters: {
+    doubleCount: (state) => state.setting,
+  },
+  persist: {
+    storage: localStorage, // Use localStorage by default
+    paths: ["setting"], // Persist only the 'setting' state
+  },
+});
+
+// Export the type for use elsewhere
+export type Counter = ReturnType<typeof useCounter>;
