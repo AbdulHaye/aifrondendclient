@@ -43,7 +43,8 @@
 
 <script>
 import MessageBubble from "./MessageBubble.vue";
-import { ref, watch, nextTick } from "vue";
+import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { debounce } from "lodash"; // Optional: Use lodash for debouncing
 
 export default {
   name: "ModelChat",
@@ -59,6 +60,7 @@ export default {
   setup(props, { emit }) {
     const chatContainer = ref(null);
     const speakIsAudio = ref(props.speakIsAudio);
+    let mutationObserver = null;
 
     const toggleSpeak = (text) => emit("toggle-speak", text);
     const refreshAnswer = (question) => emit("refresh-answer", question);
@@ -66,37 +68,17 @@ export default {
     const exportPdf = (text) => emit("export-pdf", text);
     const deleteMessage = (messageId) => emit("delete", messageId);
 
-    // Function to scroll to the bottom with retries
-    const scrollToBottom = async () => {
+    // Debounced scroll to bottom function
+    const scrollToBottom = debounce(async () => {
       await nextTick(); // Wait for DOM update
       if (!chatContainer.value) return;
 
       const container = chatContainer.value;
-      let attempts = 0;
-      const maxAttempts = 5;
-      const retryDelay = 100; // ms
-
-      const tryScroll = () => {
-        const previousScrollHeight = container.scrollHeight;
-        container.scrollTo({
-          top: container.scrollHeight,
-          behavior: "smooth",
-        });
-
-        // Check if scrollHeight changed (e.g., due to images loading)
-        setTimeout(() => {
-          if (
-            attempts < maxAttempts &&
-            container.scrollHeight > previousScrollHeight
-          ) {
-            attempts++;
-            tryScroll(); // Retry if scrollHeight increased
-          }
-        }, retryDelay);
-      };
-
-      tryScroll();
-    };
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }, 100);
 
     // Watch for changes in messages and scroll to bottom
     watch(
@@ -107,7 +89,7 @@ export default {
       { deep: true }
     );
 
-    // Scroll to bottom on initial mount if messages exist
+    // Watch for initial messages and scroll to bottom
     watch(
       () => props.messages.length,
       (newLength) => {
@@ -118,6 +100,37 @@ export default {
       { immediate: true }
     );
 
+    // Set up MutationObserver to detect DOM changes
+    const setupMutationObserver = () => {
+      if (!chatContainer.value) return;
+
+      mutationObserver = new MutationObserver(() => {
+        scrollToBottom();
+      });
+
+      mutationObserver.observe(chatContainer.value, {
+        childList: true, // Detect addition/removal of messages
+        subtree: true, // Detect changes in descendants (e.g., image loading)
+        characterData: true, // Detect text changes
+      });
+    };
+
+    // Initialize MutationObserver on mount
+    onMounted(() => {
+      setupMutationObserver();
+      console.log(
+        `ModelChat mounted for ${props.model}, messages:`,
+        props.messages
+      );
+    });
+
+    // Clean up MutationObserver on unmount
+    onUnmounted(() => {
+      if (mutationObserver) {
+        mutationObserver.disconnect();
+      }
+    });
+
     return {
       chatContainer,
       speakIsAudio,
@@ -127,12 +140,6 @@ export default {
       exportPdf,
       deleteMessage,
     };
-  },
-  mounted() {
-    console.log(
-      `ModelChat mounted for ${this.model}, messages:`,
-      this.messages
-    );
   },
 };
 </script>
