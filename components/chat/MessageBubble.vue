@@ -32,14 +32,13 @@
           ]"
         >
           <div class="flex gap-2">
-            <!-- Existing Buttons -->
-            <button class="chat-tool-btn" @click="$emit('toggleSpeak', text)">
+            <button class="chat-tool-btn" @click="$emit('toggle-speak', text)">
               <div class="sign"><icon-voice /></div>
               <div class="text">{{ speakIsAudio ? "停止" : "朗读" }}</div>
             </button>
             <button
               class="chat-tool-btn"
-              @click="$emit('refreshAnswer', question)"
+              @click="$emit('refresh-answer', question)"
             >
               <div class="sign"><icon-refresh /></div>
               <div class="text">重新生成</div>
@@ -48,11 +47,11 @@
               <div class="sign"><icon-copy /></div>
               <div class="text">复制答案</div>
             </button>
-            <button class="chat-tool-btn" @click="$emit('exportWord', text)">
+            <button class="chat-tool-btn" @click="$emit('export-word', text)">
               <div class="sign"><icon-share-internal /></div>
               <div class="text">导出Word</div>
             </button>
-            <button class="chat-tool-btn" @click="$emit('exportPdf', text)">
+            <button class="chat-tool-btn" @click="$emit('export-pdf', text)">
               <div class="sign"><icon-download /></div>
               <div class="text">导出PDF</div>
             </button>
@@ -66,7 +65,6 @@
                 <div class="text">删除</div>
               </button>
             </a-popconfirm>
-            <!-- Thumbs Up Button -->
             <button class="chat-tool-btn" @click="handleThumbsUp">
               <div class="sign">
                 <svg
@@ -85,7 +83,6 @@
               </div>
               <div class="text">好评</div>
             </button>
-            <!-- Thumbs Down Button -->
             <button class="chat-tool-btn" @click="handleThumbsDown">
               <div class="sign">
                 <svg
@@ -171,6 +168,7 @@ export default {
     question: { type: String, default: "" },
     speakIsAudio: { type: Boolean, default: false },
     images: { type: Array, default: () => [] },
+    isHistory: { type: Boolean, default: false },
   },
   setup(props, { emit }) {
     const displayedText = ref("");
@@ -183,7 +181,7 @@ export default {
         clearInterval(intervalId);
         intervalId = null;
       }
-      if (props.isUser) {
+      if (props.isUser || props.isHistory) {
         displayedText.value = props.text;
         return;
       }
@@ -245,14 +243,12 @@ export default {
       );
     };
 
-    // Map modelKey to ai_function
     const mapModelToAiFunction = (modelKey) => {
       const mapping = {
         grok: "text",
         claude: "text",
-        // Add mappings for other models, e.g., 'dalle': 'ai_draw', 'stable-diffusion': 'ai_painting'
       };
-      return mapping[modelKey] || "text"; // Default to 'text' if unknown
+      return mapping[modelKey] || "text";
     };
 
     return {

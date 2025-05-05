@@ -1234,6 +1234,7 @@
               @feedback="handleFeedback"
               @close="add_new_chat"
               @history-updated="handleHistoryUpdated"
+              @message-sent="handleMessageSent"
             />
 
             <!-- Model Selection Modal -->
@@ -1492,7 +1493,7 @@
                           type="primary"
                           size="small"
                           @click="openMultiWindow(4)"
-                          :disabled="chatModeLocked"
+                          :disabled="chatModeLocked || hasMessageBeenSent"
                         >
                           <svg
                             role="img"
@@ -1555,7 +1556,7 @@
                           type="primary"
                           size="small"
                           @click="openMultiWindow(2)"
-                          :disabled="chatModeLocked"
+                          :disabled="chatModeLocked || hasMessageBeenSent"
                         >
                           <svg
                             role="img"
@@ -3391,6 +3392,7 @@ const voice_list_arr = ref([]);
 const voice_page = ref(1);
 const voice_limit = ref(10);
 const voice_count = ref(0);
+const hasMessageBeenSent = ref(false);
 const voice_get_list = () => {
   voice_set_loading.value = true;
   voice_lists({
@@ -4082,9 +4084,9 @@ onMounted(async () => {
   }
 
   // Load the active session from cookie
-  if (activeSession.value) {
-    ms_active.value = String(activeSession.value); // Ensure it's a string
-  }
+  // if (activeSession.value) {
+  //   ms_active.value = String(activeSession.value); // Ensure it's a string
+  // }
 
   const paymentStatus = route.query.payment;
   if (paymentStatus === "succeeded") {
@@ -4104,10 +4106,11 @@ onMounted(async () => {
     speechInit();
 
     if (token.value) {
+      await add_new_chat();
       await all_message();
-      if (ms_active.value) {
-        await check_message(ms_active.value);
-      }
+      // if (ms_active.value) {
+      //   await check_message(ms_active.value);
+      // }
     }
   } catch (error) {
     console.error("Failed to fetch mode or initialize speech:", error);
@@ -4264,9 +4267,9 @@ const all_message = () => {
       max_session.value = res._rawValue.max_session;
       left_loding.value = false;
       data_load.value = false;
-      if (!ms_active.value && messages.value.length > 0) {
-        ms_active.value = String(messages.value[0].session_id); // Ensure it's a string
-      }
+      // if (!ms_active.value && messages.value.length > 0) {
+      //   ms_active.value = String(messages.value[0].session_id); // Ensure it's a string
+      // }
     })
     .catch((err) => {
       console.error("Error fetching messages:", err);
@@ -4866,6 +4869,9 @@ const check_messages = (id: number, append = false) => {
 const add_loading = ref(true);
 
 const add_new_chat = async () => {
+  showMultiWindow.value = false;
+  selectedModels.value = [];
+  hasMessageBeenSent.value = false;
   try {
     const tempSessionId = `temp_sess_${Date.now()}_${Math.random()
       .toString(36)
@@ -6043,6 +6049,7 @@ const check_sub = async () => {
     multiWindowRef.value.sendMessage(text, text_imageUrls.value);
     ruleForm.message_input = "";
     text_imageUrls.value = [];
+    hasMessageBeenSent.value = true;
   } else {
     // Single chat submission based on model
     if (counter.setting.no_login_aiqs == "1" && !token.value) {

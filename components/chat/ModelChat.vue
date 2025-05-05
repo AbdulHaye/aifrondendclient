@@ -27,6 +27,7 @@
         :question="!message.isUser && index > 0 ? messages[index - 1].text : ''"
         :speak-is-audio="speakIsAudio"
         :images="message.images || []"
+        :is-history="message.isHistory || false"
         @feedback="$emit('feedback', $event)"
         @toggle-speak="toggleSpeak"
         @refresh-answer="refreshAnswer"
@@ -44,7 +45,7 @@
 <script>
 import MessageBubble from "./MessageBubble.vue";
 import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
-import { debounce } from "lodash"; // Optional: Use lodash for debouncing
+import { debounce } from "lodash";
 
 export default {
   name: "ModelChat",
@@ -55,7 +56,7 @@ export default {
     messages: { type: Array, required: true, default: () => [] },
     avatar: { type: String, required: true },
     speakIsAudio: { type: Boolean, default: false },
-    textImageUrls: { type: Array, default: () => [] },
+    imageUrls: { type: Array, default: () => [] },
   },
   setup(props, { emit }) {
     const chatContainer = ref(null);
@@ -68,9 +69,8 @@ export default {
     const exportPdf = (text) => emit("export-pdf", text);
     const deleteMessage = (messageId) => emit("delete", messageId);
 
-    // Debounced scroll to bottom function
     const scrollToBottom = debounce(async () => {
-      await nextTick(); // Wait for DOM update
+      await nextTick();
       if (!chatContainer.value) return;
 
       const container = chatContainer.value;
@@ -80,7 +80,6 @@ export default {
       });
     }, 100);
 
-    // Watch for changes in messages and scroll to bottom
     watch(
       () => props.messages,
       () => {
@@ -89,7 +88,6 @@ export default {
       { deep: true }
     );
 
-    // Watch for initial messages and scroll to bottom
     watch(
       () => props.messages.length,
       (newLength) => {
@@ -100,7 +98,6 @@ export default {
       { immediate: true }
     );
 
-    // Set up MutationObserver to detect DOM changes
     const setupMutationObserver = () => {
       if (!chatContainer.value) return;
 
@@ -109,13 +106,12 @@ export default {
       });
 
       mutationObserver.observe(chatContainer.value, {
-        childList: true, // Detect addition/removal of messages
-        subtree: true, // Detect changes in descendants (e.g., image loading)
-        characterData: true, // Detect text changes
+        childList: true,
+        subtree: true,
+        characterData: true,
       });
     };
 
-    // Initialize MutationObserver on mount
     onMounted(() => {
       setupMutationObserver();
       console.log(
@@ -124,7 +120,6 @@ export default {
       );
     });
 
-    // Clean up MutationObserver on unmount
     onUnmounted(() => {
       if (mutationObserver) {
         mutationObserver.disconnect();

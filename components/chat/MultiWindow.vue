@@ -74,7 +74,7 @@ const props = defineProps({
   selectedModels: { type: Array, required: true, default: () => [] },
   userId: { type: [String, Number], default: null },
   speakIsAudio: { type: Boolean, default: false },
-  textImageUrls: { type: Array, default: () => [] }, // Added prop for image URLs
+  textImageUrls: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits([
@@ -87,13 +87,14 @@ const emit = defineEmits([
   "close",
   "update-session",
   "history-updated",
+  "message-sent",
 ]);
 
 const focusedModel = ref(null);
 const isReady = ref(false);
 const wsReady = ref(false);
 const isMounted = ref(false);
-const currentImageUrls = ref([]); // Store image URLs for the latest user message
+const currentImageUrls = ref([]);
 const state = reactive({
   messages: {},
   avatar:
@@ -131,31 +132,6 @@ const initializeMessages = (models) => {
   });
 };
 
-// const handleWebSocketMessage = (message) => {
-//   if (!isMounted.value) return;
-//   if (message.type === "message") {
-//     const modelKey = message.model;
-//     if (state.messages[modelKey]) {
-//       state.messages[modelKey] = state.messages[modelKey].filter(
-//         (msg) => !msg.isThinking
-//       );
-//       const responseText = message.text?.trim();
-//       state.messages[modelKey].push({
-//         id: message.message_id || generateMessageId("ai"),
-//         text: responseText || "The system is busy, please try again later.",
-//         isUser: false,
-//         isThinking: false,
-//         timestamp: new Date(),
-//         sessionId: message.session_id || state.currentSessionId,
-//       });
-//       updateSession(message.session_id);
-//       emit("history-updated", message.session_id);
-//     }
-//   } else if (message.type === "error") {
-//     handleErrorResponse(message.model, message.message);
-//   }
-// };
-
 const handleWebSocketMessage = (message) => {
   if (!isMounted.value) return;
   console.log("Received WebSocket message:", message);
@@ -165,13 +141,6 @@ const handleWebSocketMessage = (message) => {
       state.messages[modelKey] = state.messages[modelKey].filter(
         (msg) => !msg.isThinking
       );
-      console.log(
-        "Message text type:",
-        typeof message.text,
-        "value:",
-        message.text
-      ); // Add logging
-      // Ensure responseText is a string before trimming
       const responseText =
         typeof message.text === "string"
           ? message.text.trim()
@@ -273,7 +242,7 @@ const sendMessage = async (text, imageUrls = props.textImageUrls) => {
     return;
   }
   console.log("sendMessage: Received", { text, imageUrls });
-  currentImageUrls.value = imageUrls; // Store image URLs for rendering
+  currentImageUrls.value = imageUrls;
   const sessionId = state.currentSessionId || generateMessageId("sess");
   state.currentSessionId = sessionId;
 
@@ -296,6 +265,7 @@ const sendMessage = async (text, imageUrls = props.textImageUrls) => {
   });
   emit("update-session", sessionId);
   emit("history-updated", sessionId);
+  emit("message-sent");
 };
 
 const waitForWebSocket = () => {
@@ -312,72 +282,6 @@ const waitForWebSocket = () => {
     }, 10000);
   });
 };
-
-// const sendToModel = (text, imageUrls, modelKey, sessionId) => {
-//   if (!isMounted.value) return;
-//   if (!state.messages[modelKey]) state.messages[modelKey] = [];
-//   console.log("sendToModel:", { modelKey, text, imageUrls, sessionId });
-
-//   const userMessage = {
-//     id: generateMessageId("user"),
-//     text: text || "Describe these images.",
-//     images: imageUrls.length > 0 ? imageUrls : [], // Include images in message
-//     isUser: true,
-//     timestamp: new Date(),
-//     sessionId,
-//   };
-//   state.messages[modelKey].push(userMessage);
-
-//   if (!state.chatSocket || state.chatSocket.readyState !== WebSocket.OPEN) {
-//     state.messages[modelKey].push({
-//       id: generateMessageId("error"),
-//       text: "The system is busy, please try again later.",
-//       isUser: false,
-//       isThinking: false,
-//       timestamp: new Date(),
-//       sessionId,
-//     });
-//     return;
-//   }
-
-//   const thinkingId = generateMessageId("thinking");
-//   state.messages[modelKey].push({
-//     id: thinkingId,
-//     text: "Thinking...",
-//     isUser: false,
-//     isThinking: true,
-//     timestamp: new Date(),
-//     sessionId,
-//   });
-
-//   // Construct messages array for the backend
-//   const messages = [
-//     { role: "user", content: text || "Describe these images." },
-//   ];
-//   if (imageUrls.length > 0) {
-//     imageUrls.forEach((url) => {
-//       messages.push({
-//         role: "user",
-//         content: [{ type: "image_url", image_url: { url } }],
-//       });
-//     });
-//   }
-
-//   const payload = {
-//     messages, // Use messages array instead of text and image_urls
-//     model: modelKey,
-//     userId: props.userId ?? "anonymous", // Ensure userId is not null to pass validation
-//     session_id: sessionId,
-//     is_multi: true,
-//     type: "default",
-//   };
-//   console.log("sendToModel: Sending WebSocket payload", payload);
-//   state.chatSocket.send(JSON.stringify(payload));
-
-//   setTimeout(() => {
-//     if (isMounted.value) updateThinkingMessage(modelKey, thinkingId);
-//   }, 30000);
-// };
 
 const sendToModel = (text, imageUrls, modelKey, sessionId) => {
   if (!isMounted.value) return;
@@ -416,7 +320,6 @@ const sendToModel = (text, imageUrls, modelKey, sessionId) => {
     sessionId,
   });
 
-  // Combine text and images into a single message's content array
   const messageContent = [];
   if (text) {
     messageContent.push({
@@ -491,10 +394,11 @@ const loadHistory = async (sessionId) => {
           state.messages[modelKey].push({
             id: `${msg.id}-user`,
             text: msg.question || "",
-            images: msg.images ? JSON.parse(msg.images) : [], // Parse images from history
+            images: msg.images ? JSON.parse(msg.images) : [],
             isUser: true,
             timestamp: new Date(msg.created_at),
             sessionId: msg.session_id,
+            isHistory: true, // Mark as historical message
           });
         }
 
@@ -505,15 +409,18 @@ const loadHistory = async (sessionId) => {
             isUser: false,
             timestamp: new Date(msg.created_at),
             sessionId: msg.session_id,
+            isHistory: true, // Mark as historical message
           });
         }
       });
 
       props.selectedModels.forEach((model) => {
-        if (!state.messages[model.model_key]) state.messages[model_key] = [];
+        if (!state.messages[model.model_key])
+          state.messages[model.model_key] = [];
       });
 
       isReady.value = true;
+      await nextTick(); // Ensure DOM updates before scrolling
       emit("history-updated", sessionId);
     } else {
       throw new Error("Failed to load history");
@@ -589,26 +496,32 @@ const setFocusedModel = (modelKey) => {
   if (!isMounted.value) return;
   focusedModel.value = modelKey;
 };
+
 const clearFocusedModel = () => {
   if (!isMounted.value) return;
   focusedModel.value = null;
 };
+
 const toggleSpeak = (text) => {
   if (!isMounted.value) return;
   emit("toggle-speak", text);
 };
+
 const refreshAnswer = (question) => {
   if (!isMounted.value) return;
   emit("refresh-answer", question);
 };
+
 const exportWord = (text) => {
   if (!isMounted.value) return;
   emit("export-word", text);
 };
+
 const exportPdf = (text) => {
   if (!isMounted.value) return;
   emit("export-pdf", text);
 };
+
 const deleteMessage = (messageId) => {
   if (!isMounted.value) return;
   emit("delete-message", messageId);
