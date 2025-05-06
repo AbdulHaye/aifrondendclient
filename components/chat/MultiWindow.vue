@@ -75,6 +75,7 @@ const props = defineProps({
   userId: { type: [String, Number], default: null },
   speakIsAudio: { type: Boolean, default: false },
   textImageUrls: { type: Array, default: () => [] },
+  initialSessionId: { type: [String, Number], default: null },
 });
 
 const emit = defineEmits([
@@ -117,6 +118,12 @@ const validateModels = (models) => {
 };
 
 const initializeMessages = (models) => {
+  // Initialize session_id if not already set
+  if (!state.currentSessionId) {
+    state.currentSessionId = props.initialSessionId || generateMessageId("sess");
+    emit("update-session", state.currentSessionId);
+  }
+
   models.forEach((model) => {
     if (!state.messages[model.model_key]) {
       state.messages[model.model_key] = [
@@ -128,6 +135,13 @@ const initializeMessages = (models) => {
           sessionId: state.currentSessionId,
         },
       ];
+    } else {
+      state.messages[model.model_key] = state.messages[model.model_key].map(
+        (msg) => ({
+          ...msg,
+          sessionId: state.currentSessionId,
+        })
+      );
     }
   });
 };
@@ -156,7 +170,7 @@ const handleWebSocketMessage = (message) => {
         sessionId: message.session_id || state.currentSessionId,
       });
       updateSession(message.session_id);
-      emit("history-updated", message.session_id);
+      emit("history-updated", message.session_id || state.currentSessionId);
     }
   } else if (message.type === "error") {
     handleErrorResponse(message.model, message.message);
@@ -188,7 +202,7 @@ const updateSession = (sessionId) => {
   if (sessionId && sessionId !== state.currentSessionId) {
     state.currentSessionId = sessionId;
     emit("update-session", state.currentSessionId);
-    emit("history-updated", sessionId);
+    emit("history-updated", state.currentSessionId);
   }
 };
 
@@ -243,8 +257,9 @@ const sendMessage = async (text, imageUrls = props.textImageUrls) => {
   }
   console.log("sendMessage: Received", { text, imageUrls });
   currentImageUrls.value = imageUrls;
-  const sessionId = state.currentSessionId || generateMessageId("sess");
-  state.currentSessionId = sessionId;
+
+  // Use the session_id from props or generate a temporary one
+  const sessionId = state.currentSessionId;
 
   if (!wsReady.value || state.chatSocket.readyState !== WebSocket.OPEN) {
     connectWebSocket();
@@ -398,7 +413,7 @@ const loadHistory = async (sessionId) => {
             isUser: true,
             timestamp: new Date(msg.created_at),
             sessionId: msg.session_id,
-            isHistory: true, // Mark as historical message
+            isHistory: true,
           });
         }
 
@@ -409,7 +424,7 @@ const loadHistory = async (sessionId) => {
             isUser: false,
             timestamp: new Date(msg.created_at),
             sessionId: msg.session_id,
-            isHistory: true, // Mark as historical message
+            isHistory: true,
           });
         }
       });
@@ -420,8 +435,9 @@ const loadHistory = async (sessionId) => {
       });
 
       isReady.value = true;
-      await nextTick(); // Ensure DOM updates before scrolling
-      emit("history-updated", sessionId);
+      await nextTick();
+      emit("update-session", state.currentSessionId);
+      emit("history-updated", state.currentSessionId);
     } else {
       throw new Error("Failed to load history");
     }

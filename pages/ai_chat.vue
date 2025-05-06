@@ -1225,6 +1225,7 @@
               :selectedModels="selectedModels"
               :user-id="userId"
               :text-image-urls="text_imageUrls"
+              :initial-session-id="ms_active"
               ref="multiWindowRef"
               @toggle-speak="toggleSpeak"
               @refresh-answer="refreshAnswer"
@@ -4868,28 +4869,28 @@ const check_messages = (id: number, append = false) => {
 
 const add_loading = ref(true);
 
-const add_new_chat = async () => {
-  showMultiWindow.value = false;
-  selectedModels.value = [];
-  hasMessageBeenSent.value = false;
-  try {
-    const tempSessionId = `temp_sess_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 5)}`;
-    ms_active.value = tempSessionId;
-    me_message.value = [];
-    showMultiWindow.value = false;
-    selectedModels.value = [];
-    chatModeLocked.value = false;
-    ruleForm.message_input = "";
-    text_imageUrls.value = [];
+// const add_new_chat = async () => {
+//   showMultiWindow.value = false;
+//   selectedModels.value = [];
+//   hasMessageBeenSent.value = false;
+//   try {
+//     const tempSessionId = `temp_sess_${Date.now()}_${Math.random()
+//       .toString(36)
+//       .substr(2, 5)}`;
+//     ms_active.value = tempSessionId;
+//     me_message.value = [];
+//     showMultiWindow.value = false;
+//     selectedModels.value = [];
+//     chatModeLocked.value = false;
+//     ruleForm.message_input = "";
+//     text_imageUrls.value = [];
 
-    console.log("New temporary chat created with session ID:", tempSessionId);
-    // Do not call all_message() here; let submitForm handle session creation
-  } catch (err) {
-    Message.error(err.message);
-  }
-};
+//     console.log("New temporary chat created with session ID:", tempSessionId);
+//     // Do not call all_message() here; let submitForm handle session creation
+//   } catch (err) {
+//     Message.error(err.message);
+//   }
+// };
 
 //   try {
 //     const tempSessionId = `temp_sess_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -4950,6 +4951,36 @@ const add_new_chat = async () => {
 // };
 
 //函数 根据小模型找到大模型 并且返回大模型下的small_model数组
+
+const add_new_chat = async () => {
+  showMultiWindow.value = false;
+  selectedModels.value = [];
+  hasMessageBeenSent.value = false;
+  try {
+    const response = await fetch(`${baseUrl}get-new-session-id`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${useCookie("token")?.value}`,
+      },
+    });
+    console.log("this is session_data ", await response);
+    if (!response.ok) throw new Error("Failed to get new session ID");
+    const data = await response.json();
+    const newSessionId = data.session_id + 1;
+
+    ms_active.value = newSessionId;
+    me_message.value = [];
+    showMultiWindow.value = false;
+    selectedModels.value = [];
+    chatModeLocked.value = false;
+    ruleForm.message_input = "";
+    text_imageUrls.value = [];
+
+    console.log("New chat created with session ID:", newSessionId);
+  } catch (err) {
+    Message.error("Error creating new chat: " + err.message);
+  }
+};
 const find_big_model = (val: any) => {
   for (let i = 0; i < big_model_list.value.length; i++) {
     for (let j = 0; j < big_model_list.value[i].small_model.length; j++) {
@@ -5415,6 +5446,159 @@ const submitForm = async () => {
   }
 };
 // Updated pollForResponse with Typewriter Effect
+// const pollForResponse = (messageId) => {
+//   const checkResponse = async () => {
+//     try {
+//       const res = await fetch(
+//         `${window.APP_CONFIG.baseUrl}check_message_status/${messageId}`,
+//         {
+//           method: "GET",
+//           headers: {
+//             Authorization: `Bearer ${token.value}`,
+//             "Content-Type": "application/json",
+//             Accept: "application/json",
+//           },
+//         }
+//       );
+
+//       const data = await res.json();
+//       if (res.status === 200 && data.status === 200) {
+//         const messageIndex = me_message.value.findIndex(
+//           (m) => m.id === messageId
+//         );
+//         if (messageIndex !== -1) {
+//           if (data.message.status === "completed") {
+//             me_message.value[messageIndex].isThinking = false;
+//             me_message.value[messageIndex].fullMessage = data.message.message;
+//             me_message.value[messageIndex].thinkProcess =
+//               data.message.think_content || "";
+//             me_message.value[messageIndex].qs_token =
+//               data.message.qs_token || 0;
+//             me_message.value[messageIndex].answer_token =
+//               data.message.answer_token || 0;
+//             typewriterEffect(messageIndex);
+//             send_loading.value = false;
+//             ruleForm.message_input = "";
+//             text_imageUrls.value = [];
+//             get_limit();
+//             clearInterval(pollingInterval);
+//           } else if (data.message.status === "failed") {
+//             me_message.value[messageIndex].isThinking = false;
+//             me_message.value[messageIndex].message = "Processing failed";
+//             send_loading.value = false;
+//             clearInterval(pollingInterval);
+//           }
+//         }
+//       }
+//     } catch (error) {
+//       console.error("Polling error:", error);
+//     }
+//   };
+
+//   const pollingInterval = setInterval(checkResponse, 200);
+// };
+
+// const typewriterEffect = (index: number) => {
+//   const fullMessage = me_message.value[index].fullMessage;
+//   const thinkProcess = me_message.value[index].thinkProcess || "";
+//   if (me_message.value[index].isTyping) return;
+//   me_message.value[index].isTyping = true;
+
+//   me_message.value[index].isCode = false;
+//   me_message.value[index].codeSegments = [];
+//   me_message.value[index].textSegments = [];
+
+//   const codeBlockRegex = /```[\s\S]*?```/g;
+//   let codeBlocks = [];
+//   let lastIndex = 0;
+//   let match;
+
+//   while ((match = codeBlockRegex.exec(fullMessage)) !== null) {
+//     const start = match.index;
+//     const end = codeBlockRegex.lastIndex;
+//     const codeContent = match[0].replace(/^```|```$/g, "").trim();
+//     codeBlocks.push({
+//       start,
+//       end,
+//       content: codeContent,
+//       textBefore: fullMessage.slice(lastIndex, start),
+//     });
+//     lastIndex = end;
+//   }
+
+//   if (codeBlocks.length === 0) {
+//     codeBlocks.push({
+//       start: 0,
+//       end: fullMessage.length,
+//       content: fullMessage,
+//       textBefore: "",
+//       isPlainText: true,
+//     });
+//   } else if (lastIndex < fullMessage.length) {
+//     codeBlocks.push({
+//       start: lastIndex,
+//       end: fullMessage.length,
+//       content: fullMessage.slice(lastIndex),
+//       textBefore: "",
+//       isPlainText: true,
+//     });
+//   }
+
+//   let currentSegment = 0;
+//   const typeNextSegment = () => {
+//     if (currentSegment >= codeBlocks.length + (thinkProcess ? 1 : 0)) {
+//       me_message.value[index].isComplete = true;
+//       me_message.value[index].isTyping = false;
+//       down_message();
+//       return;
+//     }
+
+//     if (currentSegment === codeBlocks.length && thinkProcess) {
+//       me_message.value[index].textSegments.push(thinkProcess);
+//       me_message.value[index].codeSegments.push("");
+//       currentSegment++;
+//       setTimeout(typeNextSegment, 0);
+//     } else {
+//       const segment = codeBlocks[currentSegment];
+//       const isCodeBlock = !segment.isPlainText;
+//       me_message.value[index].isCode = isCodeBlock;
+
+//       if (isCodeBlock) {
+//         me_message.value[index].codeSegments[currentSegment] = segment.content;
+//         me_message.value[index].textSegments[currentSegment] =
+//           segment.textBefore;
+//         currentSegment++;
+//         setTimeout(typeNextSegment, 0);
+//       } else {
+//         const words = segment.content.split(" ");
+//         let wordIndex = 0;
+//         me_message.value[index].textSegments[currentSegment] =
+//           segment.textBefore;
+//         me_message.value[index].codeSegments[currentSegment] = "";
+
+//         const typeWord = () => {
+//           if (wordIndex < words.length) {
+//             const currentText =
+//               me_message.value[index].textSegments[currentSegment];
+//             me_message.value[index].textSegments[currentSegment] =
+//               currentText + (currentText ? " " : "") + words[wordIndex];
+//             me_message.value[index].message =
+//               me_message.value[index].textSegments[currentSegment];
+//             wordIndex++;
+//             setTimeout(typeWord, 100);
+//           } else {
+//             currentSegment++;
+//             typeNextSegment();
+//           }
+//         };
+//         typeWord();
+//       }
+//     }
+//   };
+
+//   typeNextSegment();
+// };
+
 const pollForResponse = (messageId) => {
   const checkResponse = async () => {
     try {
@@ -5435,7 +5619,7 @@ const pollForResponse = (messageId) => {
         const messageIndex = me_message.value.findIndex(
           (m) => m.id === messageId
         );
-        if (messageIndex !== -1) {
+        if (messageIndex !== -1 && !me_message.value[messageIndex].isComplete) {
           if (data.message.status === "completed") {
             me_message.value[messageIndex].isThinking = false;
             me_message.value[messageIndex].fullMessage = data.message.message;
@@ -5445,7 +5629,7 @@ const pollForResponse = (messageId) => {
               data.message.qs_token || 0;
             me_message.value[messageIndex].answer_token =
               data.message.answer_token || 0;
-            typewriterEffect(messageIndex);
+            typewriterEffect(messageIndex); // Run typewriter only once
             send_loading.value = false;
             ruleForm.message_input = "";
             text_imageUrls.value = [];
@@ -5468,15 +5652,16 @@ const pollForResponse = (messageId) => {
 };
 
 const typewriterEffect = (index: number) => {
-  const fullMessage = me_message.value[index].fullMessage;
-  const thinkProcess = me_message.value[index].thinkProcess || "";
-  if (me_message.value[index].isTyping) return;
-  me_message.value[index].isTyping = true;
+  if (me_message.value[index].isComplete || me_message.value[index].isTyping)
+    return;
 
+  me_message.value[index].isTyping = true;
   me_message.value[index].isCode = false;
   me_message.value[index].codeSegments = [];
   me_message.value[index].textSegments = [];
 
+  const fullMessage = me_message.value[index].fullMessage;
+  const thinkProcess = me_message.value[index].thinkProcess || "";
   const codeBlockRegex = /```[\s\S]*?```/g;
   let codeBlocks = [];
   let lastIndex = 0;
@@ -5548,7 +5733,7 @@ const typewriterEffect = (index: number) => {
         const typeWord = () => {
           if (wordIndex < words.length) {
             const currentText =
-              me_message.value[index].textSegments[currentSegment];
+              me_message.value[index].textSegments[currentSegment] || "";
             me_message.value[index].textSegments[currentSegment] =
               currentText + (currentText ? " " : "") + words[wordIndex];
             me_message.value[index].message =
