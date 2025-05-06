@@ -120,7 +120,8 @@ const validateModels = (models) => {
 const initializeMessages = (models) => {
   // Initialize session_id if not already set
   if (!state.currentSessionId) {
-    state.currentSessionId = props.initialSessionId || generateMessageId("sess");
+    state.currentSessionId =
+      props.initialSessionId || generateMessageId("sess");
     emit("update-session", state.currentSessionId);
   }
 

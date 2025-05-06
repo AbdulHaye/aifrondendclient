@@ -4957,16 +4957,18 @@ const add_new_chat = async () => {
   selectedModels.value = [];
   hasMessageBeenSent.value = false;
   try {
+    console.log("calling backend to add new session");
     const response = await fetch(`${baseUrl}get-new-session-id`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${useCookie("token")?.value}`,
       },
     });
-    console.log("this is session_data ", await response);
+    // console.log("this is session_data ", await response);
     if (!response.ok) throw new Error("Failed to get new session ID");
     const data = await response.json();
-    const newSessionId = data.session_id + 1;
+    const newSessionId = data.session_id;
+    console.log("new seesio_chat ", newSessionId);
 
     ms_active.value = newSessionId;
     me_message.value = [];
@@ -5377,7 +5379,6 @@ const submitForm = async () => {
     typeof sessionId === "string" && sessionId.startsWith("temp_sess_");
 
   if (isNewSession) {
-    // For new sessions, we'll let send_bot assign the integer session ID
     requestBody.session_id = null; // Let backend assign the session ID
   }
 
@@ -5402,29 +5403,33 @@ const submitForm = async () => {
       activeSession.value = sessionId;
       newMessage.session_id = sessionId;
 
-      // Update or add session to messages.value
+      // Update or add session to messages.value with reactive trigger
       const sessionIndex = messages.value.findIndex(
         (m) => m.session_id === sessionId
       );
       if (sessionIndex !== -1) {
         // Update existing session
-        if (!messages.value[sessionIndex].message_b) {
-          messages.value[sessionIndex].message_b = newMessage.question;
-          messages.value[sessionIndex].question = newMessage.question;
-        }
-        messages.value[sessionIndex].created_at = new Date().toISOString();
-      } else {
-        // Add new session
-        messages.value.unshift({
-          session_id: sessionId,
+        messages.value[sessionIndex] = {
+          ...messages.value[sessionIndex],
           message_b: newMessage.question,
           question: newMessage.question,
-          message: "",
           created_at: new Date().toISOString(),
-          is_multi_window: false,
-          models: [model_is_select.value],
-          window_count: 1,
-        });
+        };
+      } else {
+        // Add new session and force reactivity
+        messages.value = [
+          {
+            session_id: sessionId,
+            message_b: newMessage.question,
+            question: newMessage.question,
+            message: "",
+            created_at: new Date().toISOString(),
+            is_multi_window: false,
+            models: [model_is_select.value],
+            window_count: 1,
+          },
+          ...messages.value,
+        ];
       }
 
       pollForResponse(newMessage.id);
@@ -5445,6 +5450,144 @@ const submitForm = async () => {
     plugins_select.value = false;
   }
 };
+
+// const submitForm = async () => {
+//   if (!ruleForm.message_input.trim() && !text_imageUrls.value.length) {
+//     Message.warning("Please enter content or upload images");
+//     return false;
+//   }
+//   if (text_imageUrls.value.length && plugins_select.value !== "image_read") {
+//     plugins_select.value = "image_read";
+//     model_is_select.value = "gpt-4o-2024-05-13";
+//     console.log(
+//       "Auto-corrected plugins_select to image_read due to image upload"
+//     );
+//   }
+//   if (plugins_select.value === "image_read" && !text_imageUrls.value.length) {
+//     Message.warning("Please upload at least one image for image recognition");
+//     return false;
+//   }
+//   if (send_loading.value) {
+//     Message.warning("Please wait for the previous message to send");
+//     return false;
+//   }
+//   if (!token.value) {
+//     Message.warning("Please log in first");
+//     login_dialog_click();
+//     return false;
+//   }
+
+//   const newMessage = {
+//     session_id: ms_active.value,
+//     question: ruleForm.message_input || "Describe these images.",
+//     images: [...text_imageUrls.value],
+//     message: "",
+//     isThinking: true,
+//     isComplete: false,
+//     fullMessage: "",
+//     created_at: new Date().toISOString(),
+//     qs_token: 0,
+//     answer_token: 0,
+//     id: null,
+//     textSegments: [],
+//     codeSegments: [],
+//   };
+//   me_message.value.push(newMessage);
+//   down_message();
+
+//   ruleForm.message_input = "";
+//   text_imageUrls.value = [];
+
+//   const requestBody = {
+//     info: newMessage.question,
+//     session_id: ms_active.value,
+//     scene_preset: SceneForm.domains,
+//     model_is_select: model_is_select.value,
+//     answer_num: answer_num.value,
+//     answer_tem: answer_tem.value,
+//     now_choose_knowledge: know_check.value,
+//     plugins_select: plugins_select.value,
+//     text_imageUrls: newMessage.images,
+//     deep_thinking: deep_thinking.value,
+//   };
+//   console.log(
+//     "Sending request to send_bot:",
+//     JSON.stringify(requestBody, null, 2)
+//   );
+
+//   let sessionId = ms_active.value;
+//   let isNewSession =
+//     typeof sessionId === "string" && sessionId.startsWith("temp_sess_");
+
+//   if (isNewSession) {
+//     // For new sessions, we'll let send_bot assign the integer session ID
+//     requestBody.session_id = null; // Let backend assign the session ID
+//   }
+
+//   send_loading.value = true;
+//   try {
+//     const responseData = await $fetch(`${window.APP_CONFIG.baseUrl}send_bot`, {
+//       method: "POST",
+//       headers: {
+//         Authorization: `Bearer ${token.value}`,
+//         "Content-Type": "application/json",
+//         Accept: "application/json",
+//       },
+//       body: requestBody,
+//     });
+//     console.log("send_bot response:", responseData);
+
+//     send_loading.value = false;
+//     if (responseData.status === 202) {
+//       newMessage.id = responseData.message_id;
+//       sessionId = responseData.session_id;
+//       ms_active.value = sessionId;
+//       activeSession.value = sessionId;
+//       newMessage.session_id = sessionId;
+
+//       // Update or add session to messages.value
+//       const sessionIndex = messages.value.findIndex(
+//         (m) => m.session_id === sessionId
+//       );
+//       if (sessionIndex !== -1) {
+//         // Update existing session
+//         if (!messages.value[sessionIndex].message_b) {
+//           messages.value[sessionIndex].message_b = newMessage.question;
+//           messages.value[sessionIndex].question = newMessage.question;
+//         }
+//         messages.value[sessionIndex].created_at = new Date().toISOString();
+//       } else {
+//         // Add new session
+//         messages.value.unshift({
+//           session_id: sessionId,
+//           message_b: newMessage.question,
+//           question: newMessage.question,
+//           message: "",
+//           created_at: new Date().toISOString(),
+//           is_multi_window: false,
+//           models: [model_is_select.value],
+//           window_count: 1,
+//         });
+//       }
+
+//       pollForResponse(newMessage.id);
+//     } else {
+//       newMessage.isThinking = false;
+//       const typedRespons = responseData as { message?: string };
+//       newMessage.message = typedRespons.message || "Error occurred";
+//       Message.error(responseData.message || "Request failed");
+//     }
+//   } catch (error) {
+//     newMessage.isThinking = false;
+//     newMessage.message = "Failed to process request";
+//     Message.error("Failed to send message: " + error.message);
+//   } finally {
+//     send_loading.value = false;
+//     ruleForm.message_input = "";
+//     text_imageUrls.value = [];
+//     plugins_select.value = false;
+//   }
+// };
 // Updated pollForResponse with Typewriter Effect
 // const pollForResponse = (messageId) => {
 //   const checkResponse = async () => {
@@ -5629,7 +5772,21 @@ const pollForResponse = (messageId) => {
               data.message.qs_token || 0;
             me_message.value[messageIndex].answer_token =
               data.message.answer_token || 0;
-            typewriterEffect(messageIndex); // Run typewriter only once
+
+            // Update messages.value to reflect the AI reply in the sidebar
+            const sessionId = me_message.value[messageIndex].session_id;
+            const sessionIndex = messages.value.findIndex(
+              (m) => m.session_id === sessionId
+            );
+            if (sessionIndex !== -1) {
+              messages.value[sessionIndex] = {
+                ...messages.value[sessionIndex],
+                message: data.message.message, // Update the message field with AI reply
+                created_at: new Date().toISOString(),
+              };
+            }
+
+            typewriterEffect(messageIndex);
             send_loading.value = false;
             ruleForm.message_input = "";
             text_imageUrls.value = [];
@@ -5650,7 +5807,6 @@ const pollForResponse = (messageId) => {
 
   const pollingInterval = setInterval(checkResponse, 200);
 };
-
 const typewriterEffect = (index: number) => {
   if (me_message.value[index].isComplete || me_message.value[index].isTyping)
     return;
