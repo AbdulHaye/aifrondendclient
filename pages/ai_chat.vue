@@ -6112,6 +6112,7 @@ const handleCommand = (command: any) => {
 };
 
 const delete_msg = (id: number) => {
+  console.log("deleting message", id);
   del_msg({
     session_id: id,
   })
