@@ -1,29 +1,29 @@
 <template>
   <div :class="['flex flex-col', isUser ? 'items-end' : 'items-start']">
     <div class="flex items-start relative">
-      <!-- Avatar -->
       <div
         v-if="!isUser"
         class="w-8 h-8 rounded-full overflow-hidden mr-3 flex-shrink-0"
       >
         <img :src="avatar" alt="Avatar" class="w-full h-full object-cover" />
       </div>
-
-      <!-- Message Bubble -->
       <div
         :class="[
-          'rounded-lg py-2 px-4 max-w-xs relative group',
+          'rounded-lg py-2 mb-4 px-4 max-w-xs relative group',
           isUser ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700',
         ]"
       >
-        <!-- Message Content -->
         <div v-if="!isUser && isThinking" class="thinking-dots">
-          <span>.</span><span>.</span><span>.</span>
+          <span>Thinking</span>
+          <span class="dot">.</span><span class="dot">.</span
+          ><span class="dot">.</span>
         </div>
-        <p v-else-if="!isUser" class="text-[14px]">{{ displayedText }}</p>
+        <div
+          v-else-if="!isUser"
+          class="message-content"
+          v-html="renderedMarkdown"
+        ></div>
         <p v-else class="text-[14px] text-white">{{ text }}</p>
-
-        <!-- Action Buttons Container -->
         <div
           v-if="!isUser && !isThinking"
           :class="[
@@ -107,7 +107,6 @@
         </div>
       </div>
     </div>
-    <!-- Images Display -->
     <div v-if="images && images.length > 0" class="mt-2 flex flex-wrap gap-2">
       <img
         v-for="(img, imgIndex) in images"
@@ -117,7 +116,6 @@
         alt="User uploaded image"
       />
     </div>
-    <!-- Feedback Modal -->
     <FeedbackModal
       :is-open="isFeedbackModalOpen"
       :feedback-type="feedbackType"
@@ -131,6 +129,7 @@
 
 <script>
 import { ref, watch, onMounted, onUnmounted } from "vue";
+import { marked } from "marked";
 import {
   IconVoice,
   IconRefresh,
@@ -163,8 +162,6 @@ export default {
     model: { type: String, required: true },
     modelKey: { type: String, required: true },
     isThinking: { type: Boolean, default: false },
-    typingSpeed: { type: Number, default: 2 },
-    initialDelay: { type: Number, default: 6 },
     question: { type: String, default: "" },
     speakIsAudio: { type: Boolean, default: false },
     images: { type: Array, default: () => [] },
@@ -172,43 +169,91 @@ export default {
   },
   setup(props, { emit }) {
     const displayedText = ref("");
-    let intervalId = null;
-    const isFeedbackModalOpen = ref(false);
-    const feedbackType = ref("");
+    const renderedMarkdown = ref("");
+    let typingInterval = null;
 
-    const applyEffects = () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
+    const renderMarkdown = () => {
+      try {
+        renderedMarkdown.value = marked(displayedText.value);
+      } catch (error) {
+        console.error("Markdown rendering error:", error);
+        renderedMarkdown.value = displayedText.value;
       }
-      if (props.isUser || props.isHistory) {
-        displayedText.value = props.text;
-        return;
-      }
-      if (props.isThinking) {
-        displayedText.value = "";
-        return;
-      }
-      displayedText.value = "";
-      setTimeout(() => {
-        let index = 0;
-        intervalId = setInterval(() => {
-          if (index < props.text.length) {
-            displayedText.value += props.text[index];
-            index++;
-          } else {
-            clearInterval(intervalId);
-            intervalId = null;
-          }
-        }, props.typingSpeed);
-      }, props.initialDelay);
     };
 
-    onMounted(applyEffects);
-    watch(() => [props.text, props.isThinking], applyEffects);
-    onUnmounted(() => {
-      if (intervalId) clearInterval(intervalId);
+    const startTyping = () => {
+      if (typingInterval) clearInterval(typingInterval);
+      displayedText.value = "";
+      const speed = 10;
+      let index = 0;
+      typingInterval = setInterval(() => {
+        if (index < props.text.length) {
+          displayedText.value += props.text[index];
+          index++;
+          renderMarkdown();
+        } else {
+          clearInterval(typingInterval);
+          typingInterval = null;
+        }
+      }, speed);
+    };
+
+    watch(
+      () => props.text,
+      (newText) => {
+        if (
+          !props.isUser &&
+          !props.isHistory &&
+          props.text.length > 0 &&
+          !props.isThinking
+        ) {
+          startTyping();
+        } else {
+          displayedText.value = newText;
+          renderMarkdown();
+        }
+      }
+    );
+
+    watch(
+      () => props.isThinking,
+      (newThinking) => {
+        if (
+          !newThinking &&
+          !props.isUser &&
+          props.text.length > 0 &&
+          props.text !== "Thinking..."
+        ) {
+          startTyping();
+        } else if (newThinking) {
+          displayedText.value = "Thinking...";
+          renderMarkdown();
+        }
+      }
+    );
+
+    onMounted(() => {
+      if (props.isUser || props.isHistory) {
+        displayedText.value = props.text;
+        renderMarkdown();
+      } else if (
+        !props.isThinking &&
+        props.text.length > 0 &&
+        props.text !== "Thinking..."
+      ) {
+        startTyping();
+      } else if (props.isThinking) {
+        displayedText.value = "Thinking...";
+        renderMarkdown();
+      }
     });
+
+    onUnmounted(() => {
+      if (typingInterval) clearInterval(typingInterval);
+    });
+
+    const isFeedbackModalOpen = ref(false);
+    const feedbackType = ref("");
 
     const handleThumbsUp = () => {
       feedbackType.value = "positive";
@@ -244,15 +289,13 @@ export default {
     };
 
     const mapModelToAiFunction = (modelKey) => {
-      const mapping = {
-        grok: "text",
-        claude: "text",
-      };
+      const mapping = { grok: "text", claude: "text" };
       return mapping[modelKey] || "text";
     };
 
     return {
       displayedText,
+      renderedMarkdown,
       handleThumbsUp,
       handleThumbsDown,
       handleCopy,
@@ -266,17 +309,43 @@ export default {
 </script>
 
 <style scoped>
+.message-content {
+  line-height: 1.5;
+}
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+.message-content ul,
+.message-content ol {
+  margin-left: 1.5em;
+  margin-bottom: 1em;
+}
+.message-content pre {
+  background-color: #f5f5f5;
+  padding: 10px;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+.message-content code {
+  font-family: monospace;
+}
+
 .thinking-dots {
   display: flex;
+  align-items: center;
   gap: 2px;
 }
-.thinking-dots span {
+.thinking-dots .dot {
   animation: blink 1s infinite;
 }
-.thinking-dots span:nth-child(2) {
+.thinking-dots .dot:nth-child(2) {
   animation-delay: 0.2s;
 }
-.thinking-dots span:nth-child(3) {
+.thinking-dots .dot:nth-child(3) {
   animation-delay: 0.4s;
 }
 @keyframes blink {

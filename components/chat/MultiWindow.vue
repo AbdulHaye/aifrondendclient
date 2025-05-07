@@ -104,6 +104,7 @@ const state = reactive({
   currentSessionId: null,
   reconnectAttempts: 0,
   pingInterval: null,
+  pendingThinkingMessages: {}, // To track temporary thinking message IDs
 });
 
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -118,7 +119,6 @@ const validateModels = (models) => {
 };
 
 const initializeMessages = (models) => {
-  // Initialize session_id if not already set
   if (!state.currentSessionId) {
     state.currentSessionId =
       props.initialSessionId || generateMessageId("sess");
@@ -150,27 +150,84 @@ const initializeMessages = (models) => {
 const handleWebSocketMessage = (message) => {
   if (!isMounted.value) return;
   console.log("Received WebSocket message:", message);
-  if (message.type === "message") {
+
+  if (message.type === "thinking") {
     const modelKey = message.model;
     if (state.messages[modelKey]) {
-      state.messages[modelKey] = state.messages[modelKey].filter(
-        (msg) => !msg.isThinking
+      // Find the temporary thinking message
+      const tempThinkingId = state.pendingThinkingMessages[modelKey];
+      const thinkingMessageIndex = state.messages[modelKey].findIndex(
+        (msg) => msg.id === tempThinkingId
       );
-      const responseText =
-        typeof message.text === "string"
-          ? message.text.trim()
-          : String(
-              message.text || "The system is busy, please try again later."
-            );
-      state.messages[modelKey].push({
-        id: message.message_id || generateMessageId("ai"),
-        text: responseText,
-        isUser: false,
-        isThinking: false,
-        timestamp: new Date(),
-        sessionId: message.session_id || state.currentSessionId,
-      });
+
+      if (thinkingMessageIndex !== -1) {
+        // Update the existing thinking message with the server-provided message_id
+        state.messages[modelKey][thinkingMessageIndex] = {
+          ...state.messages[modelKey][thinkingMessageIndex],
+          id: message.message_id,
+          text: "Thinking...",
+          isUser: false,
+          isThinking: true,
+          timestamp: new Date(),
+          sessionId: message.session_id || state.currentSessionId,
+        };
+        // Update the pendingThinkingMessages to reflect the new message_id
+        state.pendingThinkingMessages[modelKey] = message.message_id;
+      } else {
+        // If the thinking message was not found, create a new one
+        state.messages[modelKey].push({
+          id: message.message_id,
+          text: "Thinking...",
+          isUser: false,
+          isThinking: true,
+          timestamp: new Date(),
+          sessionId: message.session_id || state.currentSessionId,
+        });
+        state.pendingThinkingMessages[modelKey] = message.message_id;
+      }
+    }
+  } else if (message.type === "chunk") {
+    const modelKey = message.model;
+    if (state.messages[modelKey]) {
+      const messageIndex = state.messages[modelKey].findIndex(
+        (msg) => msg.id === message.message_id
+      );
+      if (messageIndex !== -1) {
+        // Update the existing message
+        const existingMessage = state.messages[modelKey][messageIndex];
+        state.messages[modelKey][messageIndex] = {
+          ...existingMessage,
+          text:
+            existingMessage.text === "Thinking..."
+              ? message.chunk
+              : existingMessage.text + message.chunk,
+          isThinking: true,
+        };
+      } else {
+        // If the message doesn't exist, create it (shouldn't happen with proper thinking message)
+        state.messages[modelKey].push({
+          id: message.message_id,
+          text: message.chunk,
+          isUser: false,
+          isThinking: true,
+          timestamp: new Date(),
+          sessionId: message.session_id || state.currentSessionId,
+        });
+        state.pendingThinkingMessages[modelKey] = message.message_id;
+      }
       updateSession(message.session_id);
+    }
+  } else if (message.type === "message_complete") {
+    const modelKey = message.model;
+    if (state.messages[modelKey]) {
+      const messageIndex = state.messages[modelKey].findIndex(
+        (msg) => msg.id === message.message_id
+      );
+      if (messageIndex !== -1) {
+        state.messages[modelKey][messageIndex].isThinking = false;
+        // Clear the pending thinking message tracking
+        delete state.pendingThinkingMessages[modelKey];
+      }
       emit("history-updated", message.session_id || state.currentSessionId);
     }
   } else if (message.type === "error") {
@@ -194,6 +251,7 @@ const handleErrorResponse = (modelKey, errorText) => {
         timestamp: new Date(),
         sessionId: state.currentSessionId,
       });
+      delete state.pendingThinkingMessages[key];
     }
   });
 };
@@ -259,7 +317,6 @@ const sendMessage = async (text, imageUrls = props.textImageUrls) => {
   console.log("sendMessage: Received", { text, imageUrls });
   currentImageUrls.value = imageUrls;
 
-  // Use the session_id from props or generate a temporary one
   const sessionId = state.currentSessionId;
 
   if (!wsReady.value || state.chatSocket.readyState !== WebSocket.OPEN) {
@@ -335,6 +392,7 @@ const sendToModel = (text, imageUrls, modelKey, sessionId) => {
     timestamp: new Date(),
     sessionId,
   });
+  state.pendingThinkingMessages[modelKey] = thinkingId;
 
   const messageContent = [];
   if (text) {
@@ -361,29 +419,6 @@ const sendToModel = (text, imageUrls, modelKey, sessionId) => {
   };
   console.log("sendToModel: Sending WebSocket payload", payload);
   state.chatSocket.send(JSON.stringify(payload));
-
-  setTimeout(() => {
-    if (isMounted.value) updateThinkingMessage(modelKey, thinkingId);
-  }, 30000);
-};
-
-const updateThinkingMessage = (modelKey, thinkingId) => {
-  if (!isMounted.value) return;
-  if (
-    state.messages[modelKey]?.some(
-      (msg) => msg.id === thinkingId && msg.isThinking
-    )
-  ) {
-    state.messages[modelKey] = state.messages[modelKey].map((msg) =>
-      msg.id === thinkingId
-        ? {
-            ...msg,
-            text: "The system is busy, please try again later.",
-            isThinking: false,
-          }
-        : msg
-    );
-  }
 };
 
 const baseUrl = "https://abdul.synthetixor.com/api";
@@ -426,6 +461,7 @@ const loadHistory = async (sessionId) => {
             timestamp: new Date(msg.created_at),
             sessionId: msg.session_id,
             isHistory: true,
+            isThinking: false,
           });
         }
       });

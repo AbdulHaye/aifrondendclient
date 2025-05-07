@@ -9,7 +9,14 @@
     </h5>
     <div
       ref="chatContainer"
-      class="relative flex-1 overflow-y-auto space-y-6 p-4"
+      class="flex-1 overflow-y-auto space-y-6 p-4"
+      style="
+        max-height: calc(100vh - 150px);
+        height: auto;
+        min-height: 0;
+        padding-bottom: 120px;
+        margin-bottom: 20px;
+      "
     >
       <MessageBubble
         v-for="(message, index) in messages"
@@ -22,8 +29,6 @@
         :message-id="message.id"
         :model="model"
         :model-key="modelKey"
-        :typing-speed="5"
-        :initial-delay="50"
         :question="!message.isUser && index > 0 ? messages[index - 1].text : ''"
         :speak-is-audio="speakIsAudio"
         :images="message.images || []"
@@ -75,17 +80,17 @@ export default {
 
       const container = chatContainer.value;
       container.scrollTo({
-        top: container.scrollHeight,
+        top: container.scrollHeight - container.clientHeight,
         behavior: "smooth",
       });
-    }, 100);
+    }, 0);
 
     watch(
       () => props.messages,
       () => {
         scrollToBottom();
       },
-      { deep: true }
+      { deep: true, immediate: true }
     );
 
     watch(
@@ -118,6 +123,7 @@ export default {
         `ModelChat mounted for ${props.model}, messages:`,
         props.messages
       );
+      scrollToBottom();
     });
 
     onUnmounted(() => {
