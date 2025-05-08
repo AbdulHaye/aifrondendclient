@@ -4958,12 +4958,16 @@ const add_new_chat = async () => {
   hasMessageBeenSent.value = false;
   try {
     console.log("calling backend to add new session");
-    const response = await fetch(`${baseUrl}get-new-session-id`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${useCookie("token")?.value}`,
-      },
-    });
+    const response = await fetch(
+      `https://abdul.synthetixor.com/api/get-new-session-id`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${useCookie("token")?.value}`,
+        },
+      }
+    );
+
     // console.log("this is session_data ", await response);
     if (!response.ok) throw new Error("Failed to get new session ID");
     const data = await response.json();
