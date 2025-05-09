@@ -37,14 +37,15 @@ export default defineNuxtConfig({
   ],
 
   modules: [
-    "@nuxt/devtools",
+    // "@nuxt/devtools",
+    process.env.NODE_ENV === 'development' ? '@nuxt/devtools' : undefined,
     "@pinia/nuxt",
     "@nuxtjs/color-mode",
     "@pinia-plugin-persistedstate/nuxt",
     "nuxt-icon",
     "nuxt-security",
     "@nuxt/ui",
-  ],
+  ].filter(Boolean),
 
   devtools: {
     enabled: false,
@@ -52,7 +53,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
-      baseUrl: process.env.VITE_SERVER_NAME,
+      baseUrl: process.env.VITE_SERVER_NAME || 'http://localhost:3000',
     },
   },
 
@@ -140,7 +141,8 @@ export default defineNuxtConfig({
         "img-src": ["'self'", "data:", "https://imgs.signifyd.com", "*"],
       },
       permissionsPolicy: {
-        microphone: ["'self'"], // Allow microphone for the current origin
+        // microphone: ["'self'"], // Allow microphone for the current origin
+        microphone: [],
       },
     },
   },

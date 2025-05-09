@@ -10,13 +10,13 @@
     <div
       ref="chatContainer"
       class="flex-1 overflow-y-auto space-y-6 p-4"
-      style="
-        max-height: calc(100vh - 150px);
-        height: auto;
-        min-height: 0;
-        padding-bottom: 120px;
-        margin-bottom: 20px;
-      "
+      :style="{
+        maxHeight: 'calc(100vh - 150px)',
+        height: 'auto',
+        minHeight: '0',
+        paddingBottom: windowCount === 2 ? '90px' : '0',
+        marginBottom: '20px',
+      }"
     >
       <MessageBubble
         v-for="(message, index) in messages"
@@ -48,9 +48,9 @@
 </template>
 
 <script>
-import MessageBubble from "./MessageBubble.vue";
-import { ref, watch, nextTick, onMounted, onUnmounted } from "vue";
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from "vue";
 import { debounce } from "lodash";
+import MessageBubble from "./MessageBubble.vue";
 
 export default {
   name: "ModelChat",
@@ -62,11 +62,24 @@ export default {
     avatar: { type: String, required: true },
     speakIsAudio: { type: Boolean, default: false },
     imageUrls: { type: Array, default: () => [] },
+    selectedModels: { type: Array, required: true, default: () => [] },
   },
   setup(props, { emit }) {
     const chatContainer = ref(null);
     const speakIsAudio = ref(props.speakIsAudio);
     let mutationObserver = null;
+
+    // Compute windowCount reactively
+    const windowCount = computed(() => {
+      const count = props.selectedModels.length;
+      console.log(
+        "Computed windowCount:",
+        count,
+        "Selected Models:",
+        props.selectedModels
+      );
+      return count;
+    });
 
     const toggleSpeak = (text) => emit("toggle-speak", text);
     const refreshAnswer = (question) => emit("refresh-answer", question);
@@ -121,7 +134,8 @@ export default {
       setupMutationObserver();
       console.log(
         `ModelChat mounted for ${props.model}, messages:`,
-        props.messages
+        props.messages,
+        `windowCount: ${windowCount.value}`
       );
       scrollToBottom();
     });
@@ -140,6 +154,7 @@ export default {
       exportWord,
       exportPdf,
       deleteMessage,
+      windowCount,
     };
   },
 };

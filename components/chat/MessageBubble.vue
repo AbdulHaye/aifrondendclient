@@ -9,12 +9,13 @@
       </div>
       <div
         :class="[
-          'rounded-lg py-2 mb-4 px-4 max-w-xs relative group',
+          'rounded-lg py-2 px-4 max-w-xs relative group',
           isUser ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-700',
+          windowCount === 2 ? 'mb-20' : 'mb-10',
         ]"
       >
         <div v-if="!isUser && isThinking" class="thinking-dots">
-          <span>Thinking</span>
+          <span>思考中</span>
           <span class="dot">.</span><span class="dot">.</span
           ><span class="dot">.</span>
         </div>
@@ -113,7 +114,7 @@
         :key="imgIndex"
         :src="img"
         class="w-16 h-16 object-contain rounded"
-        alt="User uploaded image"
+        alt="用户上传的图片"
       />
     </div>
     <FeedbackModal
@@ -166,6 +167,7 @@ export default {
     speakIsAudio: { type: Boolean, default: false },
     images: { type: Array, default: () => [] },
     isHistory: { type: Boolean, default: false },
+    windowCount: { type: Number, default: 0 },
   },
   setup(props, { emit }) {
     const displayedText = ref("");
@@ -174,7 +176,12 @@ export default {
 
     const renderMarkdown = () => {
       try {
-        renderedMarkdown.value = marked(displayedText.value);
+        // Configure marked to handle UTF-8 correctly
+        renderedMarkdown.value = marked(displayedText.value, {
+          gfm: true,
+          breaks: true,
+          silent: true, // Suppress warnings
+        });
       } catch (error) {
         console.error("Markdown rendering error:", error);
         renderedMarkdown.value = displayedText.value;
@@ -184,11 +191,14 @@ export default {
     const startTyping = () => {
       if (typingInterval) clearInterval(typingInterval);
       displayedText.value = "";
-      const speed = 10;
+      const speed = 10; // Typing speed in milliseconds per character
       let index = 0;
+      const textLength = props.text.length;
+
       typingInterval = setInterval(() => {
-        if (index < props.text.length) {
-          displayedText.value += props.text[index];
+        if (index < textLength) {
+          // Use substring to ensure character-by-character display
+          displayedText.value = props.text.substring(0, index + 1);
           index++;
           renderMarkdown();
         } else {
@@ -204,7 +214,7 @@ export default {
         if (
           !props.isUser &&
           !props.isHistory &&
-          props.text.length > 0 &&
+          newText.length > 0 &&
           !props.isThinking
         ) {
           startTyping();
@@ -226,7 +236,7 @@ export default {
         ) {
           startTyping();
         } else if (newThinking) {
-          displayedText.value = "Thinking...";
+          displayedText.value = "思考中...";
           renderMarkdown();
         }
       }
@@ -243,7 +253,7 @@ export default {
       ) {
         startTyping();
       } else if (props.isThinking) {
-        displayedText.value = "Thinking...";
+        displayedText.value = "思考中...";
         renderMarkdown();
       }
     });
@@ -283,8 +293,8 @@ export default {
 
     const handleCopy = () => {
       navigator.clipboard.writeText(props.text).then(
-        () => console.log("Copied to clipboard"),
-        (err) => console.error("Failed to copy:", err)
+        () => console.log("已复制到剪贴板"),
+        (err) => console.error("复制失败:", err)
       );
     };
 
@@ -311,6 +321,7 @@ export default {
 <style scoped>
 .message-content {
   line-height: 1.5;
+  font-size: 14px;
 }
 .message-content h1,
 .message-content h2,

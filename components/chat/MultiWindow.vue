@@ -22,6 +22,8 @@
           :avatar="state.avatar"
           :speak-is-audio="speakIsAudio"
           :image-urls="currentImageUrls"
+          :selected-models="selectedModels"
+          :models="selectedModels"
           @click="setFocusedModel(model.model_key)"
           @feedback="handleFeedback"
           @toggle-speak="toggleSpeak"
@@ -104,7 +106,7 @@ const state = reactive({
   currentSessionId: null,
   reconnectAttempts: 0,
   pingInterval: null,
-  pendingThinkingMessages: {}, // To track temporary thinking message IDs
+  pendingThinkingMessages: {},
 });
 
 const MAX_RECONNECT_ATTEMPTS = 5;
@@ -154,14 +156,12 @@ const handleWebSocketMessage = (message) => {
   if (message.type === "thinking") {
     const modelKey = message.model;
     if (state.messages[modelKey]) {
-      // Find the temporary thinking message
       const tempThinkingId = state.pendingThinkingMessages[modelKey];
       const thinkingMessageIndex = state.messages[modelKey].findIndex(
         (msg) => msg.id === tempThinkingId
       );
 
       if (thinkingMessageIndex !== -1) {
-        // Update the existing thinking message with the server-provided message_id
         state.messages[modelKey][thinkingMessageIndex] = {
           ...state.messages[modelKey][thinkingMessageIndex],
           id: message.message_id,
@@ -171,10 +171,8 @@ const handleWebSocketMessage = (message) => {
           timestamp: new Date(),
           sessionId: message.session_id || state.currentSessionId,
         };
-        // Update the pendingThinkingMessages to reflect the new message_id
         state.pendingThinkingMessages[modelKey] = message.message_id;
       } else {
-        // If the thinking message was not found, create a new one
         state.messages[modelKey].push({
           id: message.message_id,
           text: "Thinking...",
@@ -193,7 +191,6 @@ const handleWebSocketMessage = (message) => {
         (msg) => msg.id === message.message_id
       );
       if (messageIndex !== -1) {
-        // Update the existing message
         const existingMessage = state.messages[modelKey][messageIndex];
         state.messages[modelKey][messageIndex] = {
           ...existingMessage,
@@ -204,7 +201,6 @@ const handleWebSocketMessage = (message) => {
           isThinking: true,
         };
       } else {
-        // If the message doesn't exist, create it (shouldn't happen with proper thinking message)
         state.messages[modelKey].push({
           id: message.message_id,
           text: message.chunk,
@@ -225,7 +221,6 @@ const handleWebSocketMessage = (message) => {
       );
       if (messageIndex !== -1) {
         state.messages[modelKey][messageIndex].isThinking = false;
-        // Clear the pending thinking message tracking
         delete state.pendingThinkingMessages[modelKey];
       }
       emit("history-updated", message.session_id || state.currentSessionId);
@@ -308,16 +303,23 @@ const retryWebSocketConnection = () => {
   setTimeout(connectWebSocket, delay);
 };
 
-const sendMessage = async (text, imageUrls = props.textImageUrls) => {
+const sendMessage = async (
+  text,
+  imageUrls = props.textImageUrls,
+  sessionId = null
+) => {
   if (!isMounted.value) return;
   if (!text?.trim() && !imageUrls.length) {
     console.warn("Cannot send message: No text or images");
     return;
   }
-  console.log("sendMessage: Received", { text, imageUrls });
+  console.log("sendMessage: Received", { text, imageUrls, sessionId });
   currentImageUrls.value = imageUrls;
 
-  const sessionId = state.currentSessionId;
+  // Use provided sessionId or fallback to initialSessionId
+  state.currentSessionId =
+    sessionId || props.initialSessionId || generateMessageId("sess");
+  const sessionIdToUse = state.currentSessionId;
 
   if (!wsReady.value || state.chatSocket.readyState !== WebSocket.OPEN) {
     connectWebSocket();
@@ -333,11 +335,11 @@ const sendMessage = async (text, imageUrls = props.textImageUrls) => {
       text || "Describe these images.",
       imageUrls,
       model.model_key,
-      sessionId
+      sessionIdToUse
     );
   });
-  emit("update-session", sessionId);
-  emit("history-updated", sessionId);
+  emit("update-session", sessionIdToUse);
+  emit("history-updated", sessionIdToUse);
   emit("message-sent");
 };
 

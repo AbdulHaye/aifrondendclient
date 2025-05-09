@@ -6392,6 +6392,20 @@ const check_sub = async () => {
       Message.warning("Please enter a message or upload an image.");
       return;
     }
+
+    // Fetch a new session ID for the multiwindow chat
+    const response = await fetch(
+      `https://abdul.synthetixor.com/api/get-new-session-id`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${useCookie("token")?.value}` },
+      }
+    );
+    if (!response.ok) throw new Error("Failed to get new session ID");
+    const data = await response.json();
+    const newSessionId = data.session_id;
+    console.log("New multiwindow chat session ID:", newSessionId);
+
     multiWindowRef.value.sendMessage(text, text_imageUrls.value);
     ruleForm.message_input = "";
     text_imageUrls.value = [];
