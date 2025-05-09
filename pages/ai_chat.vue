@@ -6394,22 +6394,33 @@ const check_sub = async () => {
     }
 
     // Fetch a new session ID for the multiwindow chat
-    const response = await fetch(
-      `https://abdul.synthetixor.com/api/get-new-session-id`,
-      {
-        method: "GET",
-        headers: { Authorization: `Bearer ${useCookie("token")?.value}` },
-      }
-    );
-    if (!response.ok) throw new Error("Failed to get new session ID");
-    const data = await response.json();
-    const newSessionId = data.session_id;
-    console.log("New multiwindow chat session ID:", newSessionId);
+    try {
+      const response = await fetch(
+        `https://abdul.synthetixor.com/api/get-new-session-id`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${useCookie("token")?.value}` },
+        }
+      );
+      if (!response.ok) throw new Error("Failed to get new session ID");
+      const data = await response.json();
+      const newSessionId = data.session_id;
+      console.log("New multiwindow chat session ID:", newSessionId);
 
-    multiWindowRef.value.sendMessage(text, text_imageUrls.value);
-    ruleForm.message_input = "";
-    text_imageUrls.value = [];
-    hasMessageBeenSent.value = true;
+      // Pass the new session ID to the multiwindow component
+      multiWindowRef.value.sendMessage(
+        text,
+        text_imageUrls.value,
+        newSessionId
+      );
+      ruleForm.message_input = "";
+      text_imageUrls.value = [];
+      hasMessageBeenSent.value = true;
+    } catch (error) {
+      console.error("Error fetching new session ID:", error);
+      Message.error("Failed to start new chat session. Please try again.");
+      return;
+    }
   } else {
     // Single chat submission based on model
     if (counter.setting.no_login_aiqs == "1" && !token.value) {

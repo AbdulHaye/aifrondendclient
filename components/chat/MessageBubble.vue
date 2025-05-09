@@ -191,7 +191,7 @@ export default {
     const startTyping = () => {
       if (typingInterval) clearInterval(typingInterval);
       displayedText.value = "";
-      const speed = 10; // Typing speed in milliseconds per character
+      const speed = 1; // Typing speed in milliseconds per character
       let index = 0;
       const textLength = props.text.length;
 
