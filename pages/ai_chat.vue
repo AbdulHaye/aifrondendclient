@@ -6368,6 +6368,83 @@ const resetForm = (formEl: FormInstance | undefined) => {
 //   }
 // };
 
+// const check_sub = async () => {
+//   const message = ruleForm.message_input.trim();
+//   if (!message) {
+//     Message.warning("请输入内容");
+//     return;
+//   }
+//   if (send_loading.value) {
+//     Message.warning("请等待上一条消息发送完成");
+//     return;
+//   }
+//   if (!token.value && counter.setting.no_login_aiqs != "1") {
+//     Message.warning("请先登录");
+//     login_dialog_click();
+//     return;
+//   }
+
+//   if (showMultiWindow.value) {
+//     const text =
+//       ruleForm.message_input ||
+//       (text_imageUrls.value.length > 0 ? "Describe these images." : "");
+//     if (!text && text_imageUrls.value.length === 0) {
+//       Message.warning("Please enter a message or upload an image.");
+//       return;
+//     }
+
+//     // Fetch a new session ID for the multiwindow chat
+//     try {
+//       const response = await fetch(
+//         `https://abdul.synthetixor.com/api/get-new-session-id`,
+//         {
+//           method: "GET",
+//           headers: { Authorization: `Bearer ${useCookie("token")?.value}` },
+//         }
+//       );
+//       if (!response.ok) throw new Error("Failed to get new session ID");
+//       const data = await response.json();
+//       const newSessionId = data.session_id;
+//       console.log("New multiwindow chat session ID:", newSessionId);
+
+//       // Pass the new session ID to the multiwindow component
+//       multiWindowRef.value.sendMessage(
+//         text,
+//         text_imageUrls.value,
+//         newSessionId
+//       );
+//       ruleForm.message_input = "";
+//       text_imageUrls.value = [];
+//       hasMessageBeenSent.value = true;
+//     } catch (error) {
+//       console.error("Error fetching new session ID:", error);
+//       Message.error("Failed to start new chat session. Please try again.");
+//       return;
+//     }
+//   } else {
+//     // Single chat submission based on model
+//     if (counter.setting.no_login_aiqs == "1" && !token.value) {
+//       await submitFormNoLogin();
+//     } else if (model_big_choose.value == "gpt") {
+//       await submitForm();
+//     } else if (model_big_choose.value == "fly") {
+//       await submitFormFly();
+//     } else if (model_big_choose.value == "baidu") {
+//       await submitFormBaidu();
+//     } else if (model_big_choose.value == "chatglm") {
+//       await submitFormGLM();
+//     } else if (model_big_choose.value == "qwen") {
+//       await submitFormQwen();
+//     } else if (model_big_choose.value == "tencent") {
+//       await submitFormTencent();
+//     } else if (model_big_choose.value == "kimi") {
+//       await submitFormKimi();
+//     } else {
+//       await submitForm();
+//     }
+//   }
+// };
+
 const check_sub = async () => {
   const message = ruleForm.message_input.trim();
   if (!message) {
@@ -6393,34 +6470,40 @@ const check_sub = async () => {
       return;
     }
 
-    // Fetch a new session ID for the multiwindow chat
-    try {
-      const response = await fetch(
-        `https://abdul.synthetixor.com/api/get-new-session-id`,
-        {
-          method: "GET",
-          headers: { Authorization: `Bearer ${useCookie("token")?.value}` },
-        }
-      );
-      if (!response.ok) throw new Error("Failed to get new session ID");
-      const data = await response.json();
-      const newSessionId = data.session_id;
-      console.log("New multiwindow chat session ID:", newSessionId);
+    let sessionIdToUse = ms_active.value; // Use the current session ID
+    console.log("Current session ID:", sessionIdToUse);
 
-      // Pass the new session ID to the multiwindow component
-      multiWindowRef.value.sendMessage(
-        text,
-        text_imageUrls.value,
-        newSessionId
-      );
-      ruleForm.message_input = "";
-      text_imageUrls.value = [];
-      hasMessageBeenSent.value = true;
-    } catch (error) {
-      console.error("Error fetching new session ID:", error);
-      Message.error("Failed to start new chat session. Please try again.");
-      return;
+    // Fetch a new session ID only if explicitly starting a new chat (e.g., ms_active is "new")
+    if (!sessionIdToUse || sessionIdToUse === "new") {
+      try {
+        const response = await fetch(
+          `https://abdul.synthetixor.com/api/get-new-session-id`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${useCookie("token")?.value}` },
+          }
+        );
+        if (!response.ok) throw new Error("Failed to get new session ID");
+        const data = await response.json();
+        sessionIdToUse = data.session_id;
+        console.log("New multiwindow chat session ID:", sessionIdToUse);
+        ms_active.value = sessionIdToUse; // Update ms_active to the new session ID
+      } catch (error) {
+        console.error("Error fetching new session ID:", error);
+        Message.error("Failed to start new chat session. Please try again.");
+        return;
+      }
     }
+
+    // Send the message with the appropriate session ID
+    multiWindowRef.value.sendMessage(
+      text,
+      text_imageUrls.value,
+      sessionIdToUse
+    );
+    ruleForm.message_input = "";
+    text_imageUrls.value = [];
+    hasMessageBeenSent.value = true;
   } else {
     // Single chat submission based on model
     if (counter.setting.no_login_aiqs == "1" && !token.value) {

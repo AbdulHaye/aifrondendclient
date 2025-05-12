@@ -123,9 +123,11 @@ const validateModels = (models) => {
 const initializeMessages = (models) => {
   if (!state.currentSessionId) {
     state.currentSessionId =
-      props.initialSessionId || generateMessageId("sess");
-    emit("update-session", state.currentSessionId);
+      props.initialSessionId && props.initialSessionId !== "new"
+        ? props.initialSessionId
+        : null;
   }
+  emit("update-session", state.currentSessionId);
 
   models.forEach((model) => {
     if (!state.messages[model.model_key]) {
@@ -152,6 +154,11 @@ const initializeMessages = (models) => {
 const handleWebSocketMessage = (message) => {
   if (!isMounted.value) return;
   console.log("Received WebSocket message:", message);
+
+  if (message.type === "pong") {
+    console.log("Received pong response from server");
+    return;
+  }
 
   if (message.type === "thinking") {
     const modelKey = message.model;
@@ -232,6 +239,7 @@ const handleWebSocketMessage = (message) => {
 
 const handleErrorResponse = (modelKey, errorText) => {
   if (!isMounted.value) return;
+  console.error("Error received from server:", errorText);
   const targetModels = modelKey ? [modelKey] : Object.keys(state.messages);
   targetModels.forEach((key) => {
     if (state.messages[key]) {
@@ -253,7 +261,11 @@ const handleErrorResponse = (modelKey, errorText) => {
 
 const updateSession = (sessionId) => {
   if (!isMounted.value) return;
-  if (sessionId && sessionId !== state.currentSessionId) {
+  if (
+    sessionId &&
+    sessionId !== state.currentSessionId &&
+    sessionId !== "new"
+  ) {
     state.currentSessionId = sessionId;
     emit("update-session", state.currentSessionId);
     emit("history-updated", state.currentSessionId);
@@ -274,6 +286,10 @@ const connectWebSocket = () => {
     if (!isMounted.value) return;
     wsReady.value = true;
     state.reconnectAttempts = 0;
+    state.pingInterval = setInterval(() => {
+      if (chatSocket.readyState === WebSocket.OPEN)
+        chatSocket.send(JSON.stringify({ type: "ping" }));
+    }, PING_INTERVAL);
   };
   chatSocket.onmessage = (event) => {
     if (!isMounted.value) return;
@@ -291,6 +307,7 @@ const connectWebSocket = () => {
   chatSocket.onclose = (event) => {
     if (!isMounted.value) return;
     wsReady.value = false;
+    if (state.pingInterval) clearInterval(state.pingInterval);
     if (event.code !== 1000) retryWebSocketConnection();
   };
   state.chatSocket = chatSocket;
@@ -303,10 +320,30 @@ const retryWebSocketConnection = () => {
   setTimeout(connectWebSocket, delay);
 };
 
+const fetchNewSessionId = async () => {
+  try {
+    const response = await fetch(
+      "https://abdul.synthetixor.com/api/get-new-session-id",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${useCookie("token")?.value}`,
+        },
+      }
+    );
+    if (!response.ok) throw new Error("Failed to get new session ID");
+    const data = await response.json();
+    return data.session_id;
+  } catch (error) {
+    console.error("Error fetching new session ID:", error);
+    throw error;
+  }
+};
+
 const sendMessage = async (
   text,
   imageUrls = props.textImageUrls,
-  sessionId = null
+  sessionId = state.currentSessionId
 ) => {
   if (!isMounted.value) return;
   if (!text?.trim() && !imageUrls.length) {
@@ -314,12 +351,22 @@ const sendMessage = async (
     return;
   }
   console.log("sendMessage: Received", { text, imageUrls, sessionId });
-  currentImageUrls.value = imageUrls;
 
-  // Use provided sessionId or fallback to initialSessionId
-  state.currentSessionId =
-    sessionId || props.initialSessionId || generateMessageId("sess");
-  const sessionIdToUse = state.currentSessionId;
+  let sessionIdToUse =
+    sessionId && sessionId !== "new" ? sessionId : state.currentSessionId;
+  if (!sessionIdToUse) {
+    try {
+      sessionIdToUse = await fetchNewSessionId();
+      state.currentSessionId = sessionIdToUse;
+      emit("update-session", state.currentSessionId);
+    } catch (error) {
+      handleErrorResponse(
+        null,
+        "Failed to start new chat session. Please try again."
+      );
+      return;
+    }
+  }
 
   if (!wsReady.value || state.chatSocket.readyState !== WebSocket.OPEN) {
     connectWebSocket();
@@ -330,71 +377,53 @@ const sendMessage = async (
     }
   }
 
-  props.selectedModels.forEach((model) => {
-    sendToModel(
-      text || "Describe these images.",
-      imageUrls,
-      model.model_key,
-      sessionIdToUse
-    );
-  });
+  sendToModels(text || "Describe these images.", imageUrls, sessionIdToUse);
+
   emit("update-session", sessionIdToUse);
   emit("history-updated", sessionIdToUse);
   emit("message-sent");
 };
 
-const waitForWebSocket = () => {
-  return new Promise((resolve) => {
-    const interval = setInterval(() => {
-      if (wsReady.value || !isMounted.value) {
-        clearInterval(interval);
-        resolve(true);
-      }
-    }, 500);
-    setTimeout(() => {
-      clearInterval(interval);
-      resolve(false);
-    }, 10000);
-  });
-};
-
-const sendToModel = (text, imageUrls, modelKey, sessionId) => {
+const sendToModels = (text, imageUrls, sessionId) => {
   if (!isMounted.value) return;
-  if (!state.messages[modelKey]) state.messages[modelKey] = [];
-  console.log("sendToModel:", { modelKey, text, imageUrls, sessionId });
 
-  const userMessage = {
-    id: generateMessageId("user"),
-    text: text || "Describe these images.",
-    images: imageUrls.length > 0 ? imageUrls : [],
-    isUser: true,
-    timestamp: new Date(),
-    sessionId,
-  };
-  state.messages[modelKey].push(userMessage);
+  props.selectedModels.forEach((model) => {
+    if (!state.messages[model.model_key]) state.messages[model.model_key] = [];
+    const userMessage = {
+      id: generateMessageId("user"),
+      text: text || "Describe these images.",
+      images: imageUrls.length > 0 ? imageUrls : [],
+      isUser: true,
+      timestamp: new Date(),
+      sessionId: sessionId,
+    };
+    state.messages[model.model_key].push(userMessage);
+
+    const thinkingId = generateMessageId("thinking");
+    state.messages[model.model_key].push({
+      id: thinkingId,
+      text: "Thinking...",
+      isUser: false,
+      isThinking: true,
+      timestamp: new Date(),
+      sessionId: sessionId,
+    });
+    state.pendingThinkingMessages[model.model_key] = thinkingId;
+  });
 
   if (!state.chatSocket || state.chatSocket.readyState !== WebSocket.OPEN) {
-    state.messages[modelKey].push({
-      id: generateMessageId("error"),
-      text: "The system is busy, please try again later.",
-      isUser: false,
-      isThinking: false,
-      timestamp: new Date(),
-      sessionId,
+    props.selectedModels.forEach((model) => {
+      state.messages[model.model_key].push({
+        id: generateMessageId("error"),
+        text: "The system is busy, please try again later.",
+        isUser: false,
+        isThinking: false,
+        timestamp: new Date(),
+        sessionId: sessionId,
+      });
     });
     return;
   }
-
-  const thinkingId = generateMessageId("thinking");
-  state.messages[modelKey].push({
-    id: thinkingId,
-    text: "Thinking...",
-    isUser: false,
-    isThinking: true,
-    timestamp: new Date(),
-    sessionId,
-  });
-  state.pendingThinkingMessages[modelKey] = thinkingId;
 
   const messageContent = [];
   if (text) {
@@ -411,16 +440,36 @@ const sendToModel = (text, imageUrls, modelKey, sessionId) => {
 
   const messages = [{ role: "user", content: messageContent }];
 
+  const userId =
+    props.userId && props.userId !== "anonymous"
+      ? props.userId
+      : "anonymous_user_" + Date.now();
+
   const payload = {
     messages,
-    model: modelKey,
-    userId: props.userId ?? "anonymous",
+    models: props.selectedModels.map((model) => model.model_key),
+    user_id: userId,
     session_id: sessionId,
     is_multi: true,
     type: "default",
   };
-  console.log("sendToModel: Sending WebSocket payload", payload);
+  console.log("sendToModels: Sending WebSocket payload", payload);
   state.chatSocket.send(JSON.stringify(payload));
+};
+
+const waitForWebSocket = () => {
+  return new Promise((resolve) => {
+    const interval = setInterval(() => {
+      if (wsReady.value || !isMounted.value) {
+        clearInterval(interval);
+        resolve(true);
+      }
+    }, 500);
+    setTimeout(() => {
+      clearInterval(interval);
+      resolve(false);
+    }, 10000);
+  });
 };
 
 const baseUrl = "https://abdul.synthetixor.com/api";
@@ -439,11 +488,6 @@ const loadHistory = async (sessionId) => {
         if (!state.messages[modelKey]) state.messages[modelKey] = [];
 
         if (msg.question) {
-          console.log("loadHistory: Adding user message", {
-            modelKey,
-            text: msg.question,
-            images: msg.images,
-          });
           state.messages[modelKey].push({
             id: `${msg.id}-user`,
             text: msg.question || "",
@@ -524,8 +568,12 @@ onMounted(async () => {
   isMounted.value = true;
   if (!validateModels(props.selectedModels)) return;
   initializeMessages(props.selectedModels);
+  if (props.initialSessionId && props.initialSessionId !== "new") {
+    await loadHistory(props.initialSessionId);
+  } else {
+    isReady.value = true;
+  }
   await nextTick();
-  isReady.value = true;
   connectWebSocket();
 });
 
