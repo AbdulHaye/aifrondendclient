@@ -28,7 +28,7 @@
         >
           <div id="airwallex-payment-element-first"></div>
         </div>
-        <!-- QR code display (only for non-Airwallex methods) -->
+        <!-- QR code display -->
         <div v-if="qr_show && !isAirwallexMethod(form.pay_type)">
           <a-spin :loading="qr_load">
             <div class="qr_fing relative">
@@ -37,15 +37,11 @@
                 v-if="qr_show && pay_now_type !== 'paying'"
               >
                 <h4 class="text-white" v-if="pay_now_type === 'success'">
-                  <p class="text-green-400 text-center">
-                    <icon-check />
-                  </p>
+                  <p class="text-green-400 text-center"><icon-check /></p>
                   支付成功
                 </h4>
                 <h4 class="text-white" v-else-if="pay_now_type === 'time_out'">
-                  <p class="text-red-400 text-center">
-                    <icon-close />
-                  </p>
+                  <p class="text-red-400 text-center"><icon-close /></p>
                   超时未支付
                 </h4>
               </div>
@@ -139,9 +135,7 @@
               <a-radio v-if="counter.setting.crypto_open == '1'" value="crypto"
                 >Crypto (BTC/ETH)</a-radio
               >
-              <a-radio value="balance">{{
-                counter.setting.money_name_set
-              }}</a-radio>
+              <!-- Removed 'balance' from recharge tab -->
             </a-radio-group>
           </a-form-item>
         </a-form>
@@ -167,15 +161,11 @@
                 v-if="qr_show && pay_now_type !== 'paying'"
               >
                 <h4 class="text-white" v-if="pay_now_type === 'success'">
-                  <p class="text-green-400 text-center">
-                    <icon-check />
-                  </p>
+                  <p class="text-green-400 text-center"><icon-check /></p>
                   支付成功
                 </h4>
                 <h4 class="text-white" v-else-if="pay_now_type === 'time_out'">
-                  <p class="text-red-400 text-center">
-                    <icon-close />
-                  </p>
+                  <p class="text-red-400 text-center"><icon-close /></p>
                   超时未支付
                 </h4>
               </div>
@@ -389,7 +379,6 @@ interface AirwallexInstance {
     unmount: () => void;
   };
   confirmPaymentIntent: (config: any) => Promise<{ status: string }>;
-  destroyElement: () => void;
   redirectToCheckout: (config: {
     env: string;
     intent_id: string;
@@ -418,6 +407,8 @@ import {
   get_vip_show,
   cryptomusPay,
   get_user,
+  yzf_pay,
+  buy_vip,
 } from "~/utils/api";
 
 interface VipItem {
@@ -430,7 +421,6 @@ interface VipItem {
   limit_draw: number;
   discount_price?: number;
 }
-
 interface LimitPackage {
   id: string;
   title: string;
@@ -443,7 +433,6 @@ const counter = useCounter();
 const props = defineProps({
   dialogFormVisible: { type: Boolean, default: false },
 });
-
 const emit = defineEmits(["payment-success", "handleCancels"]);
 
 const activeName = ref(
@@ -472,57 +461,12 @@ const airwallexPaymentTypes = [
   "airwallex_paypal",
 ];
 
-// const getAirwallexElementType = (
-//   payType: string
-// ): { type: string; paymentMethod?: string; redirect?: boolean } => {
-//   console.log(`Mapping pay_type: ${payType}`);
-//   switch (payType) {
-//     case "airwallex_card":
-//       return { type: "card" }; // Embedded
-//     case "Alipay":
-//       return { type: "dropin", paymentMethod: "alipay", redirect: true }; // Fallback to redirect if dropin fails
-//     case "AlipayHK":
-//       return { type: "dropin", paymentMethod: "alipayhk", redirect: true };
-//     case "WeChat Pay":
-//       return { type: "dropin", paymentMethod: "wechat", redirect: true };
-//     case "WeChat PayHK":
-//       return { type: "dropin", paymentMethod: "wechat", redirect: true };
-//     case "airwallex_paypal":
-//       return { type: "dropin", paymentMethod: "paypal", redirect: true };
-//     default:
-//       console.warn(`Unhandled pay_type: ${payType}, defaulting to dropin`);
-//       return { type: "dropin" }; // Default embedded dropin
-//   }
-// };
-// const getAirwallexElementType = (
-//   payType: string
-// ): { type: string; paymentMethod?: string } => {
-//   console.log(`Mapping pay_type: ${payType}`);
-//   switch (payType) {
-//     case "airwallex_card":
-//       return { type: "card" }; // Embedded card form
-//     case "Alipay":
-//       return { type: "dropin", paymentMethod: "alipay" };
-//     case "AlipayHK":
-//       return { type: "dropin", paymentMethod: "alipayhk" };
-//     case "WeChat Pay":
-//       return { type: "dropin", paymentMethod: "wechat" };
-//     case "WeChat PayHK":
-//       return { type: "dropin", paymentMethod: "wechat" };
-//     case "airwallex_paypal":
-//       return { type: "dropin", paymentMethod: "paypal" };
-//     default:
-//       console.warn(`Unhandled pay_type: ${payType}, defaulting to dropin`);
-//       return { type: "dropin" }; // Default to dropin for safety
-//   }
-// };
 const getAirwallexElementType = (
   payType: string
 ): { type: string; paymentMethod?: string } => {
-  console.log(`Mapping pay_type: ${payType}`);
   switch (payType) {
     case "airwallex_card":
-      return { type: "card" }; // Embedded card form
+      return { type: "card" };
     case "Alipay":
     case "AlipayHK":
     case "WeChat Pay":
@@ -531,14 +475,12 @@ const getAirwallexElementType = (
     case "airwallex_paypal":
       return { type: "dropin", paymentMethod: "paypal" };
     default:
-      console.warn(`Unhandled pay_type: ${payType}, defaulting to dropin`);
-      return { type: "dropin" }; // Default to dropin for safety
+      return { type: "dropin" };
   }
 };
 
-const isAirwallexMethod = (payType: string) => {
-  return airwallexPaymentTypes.includes(payType);
-};
+const isAirwallexMethod = (payType: string) =>
+  airwallexPaymentTypes.includes(payType);
 
 const form = reactive({
   amount: counter.setting.min_recharge
@@ -553,8 +495,7 @@ const form = reactive({
 const refreshUserInfo = async () => {
   try {
     const response = await get_user();
-    const userData = response._rawValue.data;
-    console.log("User info refreshed:", userData);
+    console.log("User info refreshed:", response._rawValue.data);
   } catch (error) {
     console.error("Failed to refresh user info:", error);
     Message.error("无法更新用户信息");
@@ -576,12 +517,10 @@ const setDefaultPayType = () => {
   )
     availableMethods.push("yzf_alipay");
   if (counter.setting.airwallex_open === "1")
-    availableMethods.push("airwallex_card"); // Default to card for Airwallex
+    availableMethods.push("airwallex_card");
   if (counter.setting.crypto_open === "1") availableMethods.push("crypto");
-
   form.pay_type =
-    availableMethods.length > 0 ? availableMethods[0] : "airwallex_card"; // Fallback to a valid Airwallex method
-  console.log(`Default pay_type set to: ${form.pay_type}`);
+    availableMethods.length > 0 ? availableMethods[0] : "airwallex_card";
 };
 
 const route = useRoute();
@@ -594,11 +533,10 @@ watch(
       refreshUserInfo();
       emit("payment-success");
       dialogFormVisible.value = false;
-    } else if (newVal === "failed") {
+    } else if (newVal === "failed")
       Message.error("Payment failed. Please try again.");
-    } else if (newVal === "error") {
+    else if (newVal === "error")
       Message.error("An error occurred during payment processing.");
-    }
     router.replace({ query: { ...route.query, payment: null, balance: null } });
   }
 );
@@ -608,36 +546,27 @@ onMounted(async () => {
   fetchSettings();
   get_limit_bag();
 });
-
 onUnmounted(() => {
   cleanupAirwallex();
   if (time_check_status.value) clearInterval(time_check_status.value);
 });
 
 const initializeAirwallex = async () => {
-  if (counter.setting?.airwallex_open !== "1") return;
-  if (!airwallex) {
-    console.error("Airwallex not available from plugin");
-    Message.error("Airwallex payment unavailable");
-    return;
-  }
+  if (counter.setting?.airwallex_open !== "1" || !airwallex) return;
   try {
-    await airwallex.init({
-      env: "demo", // Use "prod" for production
-      origin: window.location.origin,
-    });
+    await airwallex.init({ env: "demo", origin: window.location.origin });
     console.log("Airwallex initialized successfully with env: demo");
   } catch (error) {
     console.error("Airwallex initialization failed:", error);
     Message.error("Failed to initialize Airwallex: " + error.message);
-    throw error; // Ensure the error propagates
+    throw error;
   }
 };
+
 const cleanupAirwallex = () => {
   if (airwallexElement.value && airwallex) {
     try {
       airwallexElement.value.unmount();
-      // Note: destroyElement is not a standard Airwallex method; remove if it causes errors
     } catch (error) {
       console.warn("Airwallex cleanup error:", error);
     }
@@ -647,23 +576,17 @@ const cleanupAirwallex = () => {
 
 const handleAirwallexPayment = async (intentData: any) => {
   if (!airwallex) {
-    console.error("Airwallex not initialized");
     Message.error("Airwallex payment unavailable");
     return;
   }
-
   try {
     cleanupAirwallex();
-
     const containerId =
       activeName.value === "first"
         ? "airwallex-payment-element-first"
         : "airwallex-payment-element-second";
     const container = document.getElementById(containerId);
-    if (!container) {
-      throw new Error(`Container ${containerId} not found`);
-    }
-
+    if (!container) throw new Error(`Container ${containerId} not found`);
     const { type, paymentMethod } = getAirwallexElementType(form.pay_type);
     const elementConfig = {
       intent: {
@@ -673,16 +596,13 @@ const handleAirwallexPayment = async (intentData: any) => {
       currency: "HKD",
       autoCapture: true,
     };
-    if (type !== "qrCode" && paymentMethod) {
-      elementConfig.payment_method = paymentMethod;
-    }
-
+    if (type !== "qrCode" && paymentMethod)
+      elementConfig.paymentMethod = paymentMethod;
     airwallexElement.value = airwallex.createElement(type, elementConfig);
     if (
       !airwallexElement.value ||
       typeof airwallexElement.value.mount !== "function"
     ) {
-      console.warn(`Falling back to redirect for ${form.pay_type}`);
       airwallex.redirectToCheckout({
         env: "demo",
         intent_id: intentData.payment_intent_id,
@@ -692,26 +612,11 @@ const handleAirwallexPayment = async (intentData: any) => {
       });
       return;
     }
-
     airwallexElement.value.mount(containerId);
-    // Event handlers...
   } catch (error) {
     console.error("Airwallex setup error:", error);
     Message.error("Payment setup failed: " + error.message);
     throw error;
-  }
-};
-
-const processPayment = async (
-  paymentMethod: Function,
-  mobileCheck: boolean
-) => {
-  const isMobile = /Mobile|Android|iOS/.test(navigator.userAgent);
-  const res = await paymentMethod();
-  if (mobileCheck && isMobile) {
-    window.location.href = res._rawValue.pay_url;
-  } else {
-    startPaymentStatusCheck(res._rawValue.order_id, res._rawValue.qr_code);
   }
 };
 
@@ -720,7 +625,6 @@ const startPaymentStatusCheck = (orderId: string, qrCode: string) => {
   pay_now_type.value = "paying";
   pay_scan.value = qrCode;
   qr_show.value = true;
-
   time_check_status.value = setInterval(async () => {
     try {
       const statusRes = await check_order_status({ order_id: orderId });
@@ -756,45 +660,91 @@ const send_charge = async () => {
     Message.error("请输入有效的充值金额");
     return;
   }
-
   charge_loading.value = true;
   qr_load.value = false;
   qr_show.value = false;
   showAirwallexForm.value = false;
+  const isMobile = /Mobile|Android|iOS/.test(navigator.userAgent);
 
   try {
-    if (isAirwallexMethod(form.pay_type)) {
-      console.log(`Initiating Airwallex payment for ${form.pay_type}`);
-      const res = await airwallexPay({
-        amount: form.amount,
-        type: "charge",
-        payment_method: form.pay_type,
-      });
-      console.log("Airwallex payment intent received:", res._rawValue);
-
-      showAirwallexForm.value = true; // Show the container
-      await nextTick(); // Wait for DOM update
-      await handleAirwallexPayment(res._rawValue); // Mount the element
-    } else {
-      // Handle non Airwallex payment methods (e.g., crypto, balance)
-      switch (form.pay_type) {
-        case "crypto":
-          qr_load.value = true;
-          qr_show.value = true;
-          const cryptoRes = await cryptomusPay({
+    switch (form.pay_type) {
+      case "alipay":
+        const alipayRes = await alipay({
+          amount: form.amount,
+          type: "charge",
+          is_mobile: isMobile && counter.setting.alipay_wap_open == "1" ? 1 : 0,
+        });
+        if (isMobile && counter.setting.alipay_wap_open == "1") {
+          window.location.href = alipayRes._rawValue.pay_url;
+        } else {
+          startPaymentStatusCheck(
+            alipayRes._rawValue.order_id,
+            alipayRes._rawValue.qr_code
+          );
+        }
+        break;
+      case "wechat":
+        const wechatRes = await wechat({
+          amount: form.amount,
+          type: "charge",
+          is_mobile: isMobile && counter.setting.wechat_wap_open == "1" ? 1 : 0,
+        });
+        if (isMobile && counter.setting.wechat_wap_open == "1") {
+          window.location.href = wechatRes._rawValue.pay_url;
+        } else {
+          startPaymentStatusCheck(
+            wechatRes._rawValue.order_id,
+            wechatRes._rawValue.qr_code
+          );
+        }
+        break;
+      case "yzf_alipay":
+        const yzfAlipayRes = await yzf_pay({
+          amount: form.amount,
+          type: "charge",
+          pay_type: "alipay",
+        });
+        const formDiv = document.createElement("div");
+        formDiv.innerHTML = yzfAlipayRes._rawValue.data;
+        document.body.appendChild(formDiv);
+        document.getElementById("dopay")?.submit();
+        break;
+      case "yzf_wechat":
+        const yzfWechatRes = await yzf_pay({
+          amount: form.amount,
+          type: "charge",
+          pay_type: "wxpay",
+        });
+        const formDiv2 = document.createElement("div");
+        formDiv2.innerHTML = yzfWechatRes._rawValue.data;
+        document.body.appendChild(formDiv2);
+        document.getElementById("dopay")?.submit();
+        break;
+      case "crypto":
+        qr_load.value = true;
+        qr_show.value = true;
+        const cryptoRes = await cryptomusPay({
+          amount: form.amount,
+          type: "charge",
+          pay_type: form.pay_type,
+        });
+        window.open(cryptoRes._rawValue.qr_code, "_blank");
+        dialogFormVisible.value = false;
+        break;
+      default:
+        if (isAirwallexMethod(form.pay_type)) {
+          const res = await airwallexPay({
             amount: form.amount,
             type: "charge",
-            pay_type: form.pay_type,
+            payment_method: form.pay_type,
           });
-          window.open(cryptoRes._rawValue.qr_code, "_blank");
-          dialogFormVisible.value = false;
-          break;
-        case "balance":
-          break;
-        default:
-          Message.error("未选择的支付方式");
-          break;
-      }
+          showAirwallexForm.value = true;
+          await nextTick();
+          await handleAirwallexPayment(res._rawValue);
+        } else {
+          Message.error("未支持的支付方式");
+        }
+        break;
     }
   } catch (error) {
     console.error("Payment error:", error);
@@ -810,49 +760,108 @@ const up_to_vip = async () => {
     Message.error("请选择VIP套餐");
     return;
   }
-
   charge_loading.value = true;
   qr_load.value = false;
   qr_show.value = false;
   showAirwallexForm.value = false;
+  const isMobile = /Mobile|Android|iOS/.test(navigator.userAgent);
 
   try {
-    if (isAirwallexMethod(form.pay_type)) {
-      console.log(`Initiating Airwallex VIP payment for ${form.pay_type}`);
-      const res = await airwallexPay({
-        v_id: vip_ids.value,
-        amount: vip_now_money.value,
-        type: "vip",
-        coupon: form.kami,
-        payment_method: form.pay_type,
-      });
-      console.log("Airwallex payment intent received:", res._rawValue);
-
-      showAirwallexForm.value = true; // Show the container
-      await nextTick(); // Wait for DOM update
-      await handleAirwallexPayment(res._rawValue); // Mount the element
-    } else {
-      // Handle non Airwallex payment methods
-      switch (form.pay_type) {
-        case "crypto":
-          qr_load.value = true;
-          const cryptoRes = await cryptomusPay({
+    switch (form.pay_type) {
+      case "alipay":
+        const alipayRes = await alipay({
+          v_id: vip_ids.value,
+          amount: vip_now_money.value,
+          type: "vip",
+          coupon: form.kami,
+          is_mobile: isMobile && counter.setting.alipay_wap_open == "1" ? 1 : 0,
+        });
+        if (isMobile && counter.setting.alipay_wap_open == "1") {
+          window.location.href = alipayRes._rawValue.pay_url;
+        } else {
+          startPaymentStatusCheck(
+            alipayRes._rawValue.order_id,
+            alipayRes._rawValue.qr_code
+          );
+        }
+        break;
+      case "wechat":
+        const wechatRes = await wechat({
+          v_id: vip_ids.value,
+          amount: vip_now_money.value,
+          type: "vip",
+          coupon: form.kami,
+          is_mobile: isMobile && counter.setting.wechat_wap_open == "1" ? 1 : 0,
+        });
+        if (isMobile && counter.setting.wechat_wap_open == "1") {
+          window.location.href = wechatRes._rawValue.pay_url;
+        } else {
+          startPaymentStatusCheck(
+            wechatRes._rawValue.order_id,
+            wechatRes._rawValue.qr_code
+          );
+        }
+        break;
+      case "yzf_alipay":
+        const yzfAlipayRes = await yzf_pay({
+          v_id: vip_ids.value,
+          amount: vip_now_money.value,
+          type: "vip",
+          coupon: form.kami,
+          pay_type: "alipay",
+        });
+        const formDiv = document.createElement("div");
+        formDiv.innerHTML = yzfAlipayRes._rawValue.data;
+        document.body.appendChild(formDiv);
+        document.getElementById("dopay")?.submit();
+        break;
+      case "yzf_wechat":
+        const yzfWechatRes = await yzf_pay({
+          v_id: vip_ids.value,
+          amount: vip_now_money.value,
+          type: "vip",
+          coupon: form.kami,
+          pay_type: "wxpay",
+        });
+        const formDiv2 = document.createElement("div");
+        formDiv2.innerHTML = yzfWechatRes._rawValue.data;
+        document.body.appendChild(formDiv2);
+        document.getElementById("dopay")?.submit();
+        break;
+      case "balance":
+        await buy_vip({ v_id: vip_ids.value, coupon: form.kami });
+        Message.success("VIP购买成功");
+        handlePaymentSuccess();
+        break;
+      case "crypto":
+        qr_load.value = true;
+        const cryptoRes = await cryptomusPay({
+          v_id: vip_ids.value,
+          amount: vip_now_money.value,
+          type: "vip",
+          coupon: form.kami,
+        });
+        startPaymentStatusCheck(
+          cryptoRes._rawValue.order_id,
+          cryptoRes._rawValue.qr_code
+        );
+        break;
+      default:
+        if (isAirwallexMethod(form.pay_type)) {
+          const res = await airwallexPay({
             v_id: vip_ids.value,
             amount: vip_now_money.value,
             type: "vip",
             coupon: form.kami,
+            payment_method: form.pay_type,
           });
-          startPaymentStatusCheck(
-            cryptoRes._rawValue.order_id,
-            cryptoRes._rawValue.qr_code
-          );
-          break;
-        case "balance":
-          break;
-        default:
-          Message.error("未选择的支付方式");
-          break;
-      }
+          showAirwallexForm.value = true;
+          await nextTick();
+          await handleAirwallexPayment(res._rawValue);
+        } else {
+          Message.error("未支持的支付方式");
+        }
+        break;
     }
   } catch (error) {
     console.error("VIP payment error:", error);
@@ -862,63 +871,6 @@ const up_to_vip = async () => {
     qr_load.value = false;
   }
 };
-
-// const up_to_vip = async () => {
-//   if (!vip_ids.value) {
-//     Message.error("请选择VIP套餐");
-//     return;
-//   }
-
-//   charge_loading.value = true;
-//   qr_load.value = false;
-//   qr_show.value = false;
-//   showAirwallexForm.value = false;
-
-//   try {
-//     if (isAirwallexMethod(form.pay_type)) {
-//       console.log(`Initiating Airwallex VIP payment for ${form.pay_type}`);
-//       const res = await airwallexPay({
-//         v_id: vip_ids.value,
-//         amount: vip_now_money.value,
-//         type: "vip",
-//         coupon: form.kami,
-//         payment_method: form.pay_type,
-//       });
-//       console.log("Airwallex payment intent received:", res._rawValue);
-
-//       showAirwallexForm.value = true;
-//       await nextTick();
-//       await handleAirwallexPayment(res._rawValue);
-//     } else {
-//       switch (form.pay_type) {
-//         case "crypto":
-//           qr_load.value = true;
-//           const cryptoRes = await cryptomusPay({
-//             v_id: vip_ids.value,
-//             amount: vip_now_money.value,
-//             type: "vip",
-//             coupon: form.kami,
-//           });
-//           startPaymentStatusCheck(
-//             cryptoRes._rawValue.order_id,
-//             cryptoRes._rawValue.qr_code
-//           );
-//           break;
-//         case "balance":
-//           break;
-//         default:
-//           Message.error("未选择的支付方式");
-//           break;
-//       }
-//     }
-//   } catch (error) {
-//     console.error("VIP payment error:", error);
-//     Message.error(`支付失败: ${error.message}`);
-//   } finally {
-//     charge_loading.value = false;
-//     qr_load.value = false;
-//   }
-// };
 
 const fetchSettings = async () => {
   try {
@@ -1009,14 +961,11 @@ const handleClick = (tab: any) => {
   form.pay_type = "";
   setDefaultPayType();
 };
-
 const handleFinish = () => (pay_now_type.value = "time_out");
-
 const dialogm = () => {
   dialogFormVisible.value = false;
   cleanupAirwallex();
 };
-
 const changeLimitRadio = (e: string) => (form.limit_bag_id = e);
 </script>
 
@@ -1028,11 +977,9 @@ const changeLimitRadio = (e: string) => (form.limit_bag_id = e);
   margin: 20px 0;
   min-height: 150px;
 }
-
 .hidden {
   display: none;
 }
-
 .qr_fing {
   position: relative;
 }
