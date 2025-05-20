@@ -484,7 +484,10 @@
                         </a-tag>
                       </a-avatar>
                     </div>
-                    <div class="media-body overflow-hidden">
+                    <div
+                      class="media-body overflow-hidden"
+                      v-if="!showMultiWindow"
+                    >
                       <div class="d-flex align-items-center mb-1">
                         <!--header question-->
                         <h6
@@ -3723,21 +3726,43 @@ const openMultiWindow = (count) => {
   showModelSelectionModal.value = true;
 };
 
-const handleModelSelection = (selected) => {
+const handleModelSelection = async (selected) => {
   if (!Array.isArray(selected)) {
     console.error("Invalid selection from modal:", selected);
     selectedModels.value = [];
-  } else {
-    selectedModels.value = selected;
-    // Generate a temporary session ID instead of persisting immediately
-    const tempSessionId = `temp_multi_sess_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 5)}`;
-    ms_active.value = tempSessionId; // Set active session
-    showMultiWindow.value = true; // Show multi-window UI
-    console.log("Temporary multi-window chat initialized:", tempSessionId);
-    // Do NOT call add_chat or all_message here; wait for first message
+    return;
   }
+
+  selectedModels.value = selected;
+
+  // Use the existing ms_active.value if it exists and is not "new"
+  let sessionIdToUse = ms_active.value;
+  if (!sessionIdToUse || sessionIdToUse === "new") {
+    try {
+      const response = await fetch(
+        `https://abdul.synthetixor.com/api/get-new-session-id`,
+        {
+          method: "GET",
+          headers: { Authorization: `Bearer ${useCookie("token")?.value}` },
+        }
+      );
+      if (!response.ok) throw new Error("Failed to get new session ID");
+      const data = await response.json();
+      sessionIdToUse = data.session_id;
+      ms_active.value = sessionIdToUse; // Update ms_active with the new session ID
+      console.log(
+        "Fetched new session ID for multi-window chat:",
+        sessionIdToUse
+      );
+    } catch (error) {
+      console.error("Error fetching new session ID:", error);
+      Message.error("Failed to start new chat session. Please try again.");
+      return;
+    }
+  }
+
+  showMultiWindow.value = true; // Show multi-window UI
+  console.log("Multi-window chat initialized with session ID:", sessionIdToUse);
   showModelSelectionModal.value = false; // Close modal
 };
 
@@ -4957,7 +4982,7 @@ const add_new_chat = async () => {
   selectedModels.value = [];
   hasMessageBeenSent.value = false;
   try {
-    console.log("calling backend to add new session");
+    console.log("Calling backend to add new session");
     const response = await fetch(
       `https://abdul.synthetixor.com/api/get-new-session-id`,
       {
@@ -4968,12 +4993,12 @@ const add_new_chat = async () => {
       }
     );
 
-    // console.log("this is session_data ", await response);
     if (!response.ok) throw new Error("Failed to get new session ID");
     const data = await response.json();
     const newSessionId = data.session_id;
-    console.log("new seesio_chat ", newSessionId);
+    console.log("New session ID for chat:", newSessionId);
 
+    // Reset state and set the new session ID
     ms_active.value = newSessionId;
     me_message.value = [];
     showMultiWindow.value = false;
@@ -4982,6 +5007,7 @@ const add_new_chat = async () => {
     ruleForm.message_input = "";
     text_imageUrls.value = [];
 
+    // Ensure the new session ID is logged and ready for multi-window
     console.log("New chat created with session ID:", newSessionId);
   } catch (err) {
     Message.error("Error creating new chat: " + err.message);

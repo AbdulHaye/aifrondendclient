@@ -27,6 +27,23 @@
           }"
         >
           <div id="airwallex-payment-element-first"></div>
+          <!-- Added Submit Button for Airwallex Card -->
+          <div class="payment-actions">
+            <button
+              v-if="form.pay_type === 'airwallex_card' && showAirwallexForm"
+              @click="confirmAirwallexPayment"
+              :disabled="!isAirwallexReady || confirmLoading"
+              class="pay-button"
+            >
+              Pay with Airwallex
+            </button>
+          </div>
+          <!-- Debug Info -->
+          <div v-if="isAirwallexMethod(form.pay_type) && !showAirwallexForm">
+            <p class="text-red-500">
+              Airwallex form not shown. Please click "立即充值" to proceed.
+            </p>
+          </div>
         </div>
         <!-- QR code display -->
         <div v-if="qr_show && !isAirwallexMethod(form.pay_type)">
@@ -135,7 +152,6 @@
               <a-radio v-if="counter.setting.crypto_open == '1'" value="crypto"
                 >Crypto (BTC/ETH)</a-radio
               >
-              <!-- Removed 'balance' from recharge tab -->
             </a-radio-group>
           </a-form-item>
         </a-form>
@@ -151,6 +167,24 @@
           }"
         >
           <div id="airwallex-payment-element-second"></div>
+          <!-- Added Submit Button for Airwallex Card -->
+
+          <div class="payment-actions">
+            <button
+              v-if="form.pay_type === 'airwallex_card' && showAirwallexForm"
+              @click="confirmAirwallexPayment"
+              :disabled="!isAirwallexReady || confirmLoading"
+              class="pay-button"
+            >
+              Pay with Airwallex
+            </button>
+          </div>
+          <!-- Debug Info -->
+          <div v-if="isAirwallexMethod(form.pay_type) && !showAirwallexForm">
+            <p class="text-red-500">
+              Airwallex form not shown. Please click "立即充值" to proceed.
+            </p>
+          </div>
         </div>
         <!-- QR code display -->
         <div v-if="qr_show && !isAirwallexMethod(form.pay_type)">
@@ -365,7 +399,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, onMounted, onUnmounted } from "vue";
+import { nextTick, ref, onMounted, onUnmounted, computed, watch } from "vue";
 const { $airwallex } = useNuxtApp();
 
 interface AirwallexInstance {
@@ -389,9 +423,8 @@ interface AirwallexInstance {
 }
 
 const airwallex = $airwallex as AirwallexInstance | null;
-import { watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { reactive, computed } from "vue";
+import { reactive } from "vue";
 import QrcodeVue from "qrcode.vue";
 import { useCounter } from "~/store/counter";
 import { Message } from "@arco-design/web-vue";
@@ -451,6 +484,9 @@ const vip_ids = ref("");
 const vip_now_money = ref(0);
 const limit_list = ref<LimitPackage[]>([]);
 const airwallexElement = ref<any>(null);
+const airwallexIntent = ref<any>(null);
+const confirmLoading = ref(false);
+const isAirwallexInitialized = ref(false);
 
 const airwallexPaymentTypes = [
   "airwallex_card",
@@ -482,6 +518,23 @@ const getAirwallexElementType = (
 const isAirwallexMethod = (payType: string) =>
   airwallexPaymentTypes.includes(payType);
 
+const isAirwallexReady = computed(() => {
+  const ready =
+    isAirwallexInitialized.value &&
+    airwallexElement.value &&
+    airwallexIntent.value &&
+    airwallexIntent.value.payment_intent_id &&
+    airwallexIntent.value.client_secret;
+  console.log("isAirwallexReady:", ready, {
+    isAirwallexInitialized: isAirwallexInitialized.value,
+    airwallexElement: airwallexElement.value,
+    airwallexIntent: airwallexIntent.value,
+    payment_intent_id: airwallexIntent.value?.payment_intent_id,
+    client_secret: airwallexIntent.value?.client_secret,
+  });
+  return ready;
+});
+
 const form = reactive({
   amount: counter.setting.min_recharge
     ? parseFloat(counter.setting.min_recharge)
@@ -491,6 +544,22 @@ const form = reactive({
   kami: "",
   limit_bag_id: "",
 });
+
+watch(
+  () => form.pay_type,
+  (newVal, oldVal) => {
+    console.log("Pay type changed from:", oldVal, "to:", newVal);
+    const wasAirwallex = isAirwallexMethod(oldVal);
+    const isNowAirwallex = isAirwallexMethod(newVal);
+    if (wasAirwallex && !isNowAirwallex && !showAirwallexForm.value) {
+      cleanupAirwallex();
+    } else if (!wasAirwallex && isNowAirwallex) {
+      console.log(
+        "Switched to Airwallex method, awaiting user to click 立即充值"
+      );
+    }
+  }
+);
 
 const refreshUserInfo = async () => {
   try {
@@ -521,6 +590,7 @@ const setDefaultPayType = () => {
   if (counter.setting.crypto_open === "1") availableMethods.push("crypto");
   form.pay_type =
     availableMethods.length > 0 ? availableMethods[0] : "airwallex_card";
+  console.log("Default pay type set to:", form.pay_type);
 };
 
 const route = useRoute();
@@ -541,25 +611,41 @@ watch(
   }
 );
 
-onMounted(async () => {
+const initializeComponent = async () => {
   await initializeAirwallex();
-  fetchSettings();
-  get_limit_bag();
+  await fetchSettings();
+  await get_limit_bag();
+};
+
+onMounted(() => {
+  initializeComponent();
 });
+
 onUnmounted(() => {
-  cleanupAirwallex();
+  if (!showAirwallexForm.value) cleanupAirwallex();
   if (time_check_status.value) clearInterval(time_check_status.value);
 });
 
 const initializeAirwallex = async () => {
-  if (counter.setting?.airwallex_open !== "1" || !airwallex) return;
+  if (counter.setting?.airwallex_open !== "1") {
+    console.log("Airwallex is disabled in settings");
+    return;
+  }
+  if (!airwallex) {
+    console.error("Airwallex SDK is not available");
+    Message.error(
+      "Airwallex payment is unavailable due to SDK loading failure"
+    );
+    return;
+  }
   try {
     await airwallex.init({ env: "demo", origin: window.location.origin });
+    isAirwallexInitialized.value = true;
     console.log("Airwallex initialized successfully with env: demo");
   } catch (error) {
     console.error("Airwallex initialization failed:", error);
     Message.error("Failed to initialize Airwallex: " + error.message);
-    throw error;
+    isAirwallexInitialized.value = false;
   }
 };
 
@@ -567,20 +653,30 @@ const cleanupAirwallex = () => {
   if (airwallexElement.value && airwallex) {
     try {
       airwallexElement.value.unmount();
+      console.log("Airwallex element unmounted");
     } catch (error) {
       console.warn("Airwallex cleanup error:", error);
     }
     airwallexElement.value = null;
   }
+  airwallexIntent.value = null;
+  showAirwallexForm.value = false;
+  console.log("Airwallex state cleaned up");
 };
 
 const handleAirwallexPayment = async (intentData: any) => {
-  if (!airwallex) {
-    Message.error("Airwallex payment unavailable");
+  if (
+    !airwallex ||
+    !intentData ||
+    !intentData.payment_intent_id ||
+    !intentData.client_secret
+  ) {
+    console.error("Invalid payment intent data:", intentData);
+    Message.error("Invalid payment intent data");
+    showAirwallexForm.value = false;
     return;
   }
   try {
-    cleanupAirwallex();
     const containerId =
       activeName.value === "first"
         ? "airwallex-payment-element-first"
@@ -595,6 +691,14 @@ const handleAirwallexPayment = async (intentData: any) => {
       },
       currency: "HKD",
       autoCapture: true,
+      // Enable 3DS
+      payment_method_options: {
+        card: {
+          three_ds: {
+            enabled: true,
+          },
+        },
+      },
     };
     if (type !== "qrCode" && paymentMethod)
       elementConfig.paymentMethod = paymentMethod;
@@ -603,6 +707,7 @@ const handleAirwallexPayment = async (intentData: any) => {
       !airwallexElement.value ||
       typeof airwallexElement.value.mount !== "function"
     ) {
+      console.log("Falling back to Airwallex redirectToCheckout");
       airwallex.redirectToCheckout({
         env: "demo",
         intent_id: intentData.payment_intent_id,
@@ -612,11 +717,97 @@ const handleAirwallexPayment = async (intentData: any) => {
       });
       return;
     }
+    // Add event listeners for Airwallex element
+    airwallexElement.value.on("ready", () => {
+      console.log("Airwallex element is ready");
+    });
+    airwallexElement.value.on("success", (event: any) => {
+      console.log("Airwallex payment succeeded:", event.detail);
+      // If 3DS is required, this event will fire after completion
+      handlePaymentSuccess();
+      confirmLoading.value = false; // Reset loading state
+    });
+    airwallexElement.value.on("error", (event: any) => {
+      console.error("Airwallex element error:", event.detail);
+      Message.error(
+        "Payment error: " + (event.detail.message || "Unknown error")
+      );
+      showAirwallexForm.value = false;
+      confirmLoading.value = false; // Reset loading state
+    });
+    airwallexElement.value.on("paymentIntentStatusChanged", (event: any) => {
+      console.log("Payment intent status changed:", event.detail);
+      // Handle state changes (e.g., requires_action for 3DS)
+      if (event.detail.status === "requires_action") {
+        console.log("3DS authentication required");
+        // The SDK will automatically handle 3DS; wait for 'success' or 'error' event
+      }
+    });
     airwallexElement.value.mount(containerId);
+    showAirwallexForm.value = true;
+    console.log("Airwallex element mounted successfully");
   } catch (error) {
     console.error("Airwallex setup error:", error);
     Message.error("Payment setup failed: " + error.message);
-    throw error;
+    showAirwallexForm.value = false;
+  }
+};
+
+const confirmAirwallexPayment = async () => {
+  if (!airwallex || !isAirwallexReady.value) {
+    console.error("Airwallex payment not ready:", {
+      airwallex,
+      isAirwallexReady: isAirwallexReady.value,
+    });
+    Message.error("Airwallex payment is not ready. Please try again.");
+    return;
+  }
+
+  confirmLoading.value = true;
+  try {
+    const result = await airwallex.confirmPaymentIntent({
+      element: airwallexElement.value,
+      id: airwallexIntent.value.payment_intent_id,
+      client_secret: airwallexIntent.value.client_secret,
+      payment_method_options: {
+        card: {
+          auto_capture: true,
+          three_ds: {
+            enabled: true,
+          },
+        },
+      },
+    });
+    console.log("Airwallex confirm result:", result);
+    if (result.status === "SUCCEEDED") {
+      Message.success("Payment successful!");
+      handlePaymentSuccess();
+      // Reset Airwallex state to prevent re-confirmation
+      cleanupAirwallex();
+    } else if (result.status === "requires_action") {
+      console.log("3DS authentication in progress, awaiting completion");
+      // SDK handles 3DS; rely on element's 'success' or 'error' events
+    } else {
+      Message.error("Payment failed: " + (result.message || "Unknown status"));
+      confirmLoading.value = false;
+    }
+  } catch (error) {
+    console.error(
+      "Airwallex payment confirmation error:",
+      JSON.stringify(error, null, 2)
+    );
+    if (error.code === "invalid_status_for_operation") {
+      Message.error(
+        "Payment has already been processed or is in an invalid state. Please start a new payment."
+      );
+      // Reset Airwallex state to allow a new payment
+      cleanupAirwallex();
+    } else if (error.code === "invalid_request_error") {
+      Message.error("Invalid card details. Please check and try again.");
+    } else {
+      Message.error("Payment failed: " + (error.message || "Unknown error"));
+    }
+    confirmLoading.value = false;
   }
 };
 
@@ -733,14 +924,33 @@ const send_charge = async () => {
         break;
       default:
         if (isAirwallexMethod(form.pay_type)) {
-          const res = await airwallexPay({
-            amount: form.amount,
+          console.log("Initiating Airwallex payment with:", {
+            amount: form.amount / 100,
             type: "charge",
             payment_method: form.pay_type,
           });
-          showAirwallexForm.value = true;
-          await nextTick();
-          await handleAirwallexPayment(res._rawValue);
+
+          const payamount = form.amount / 100;
+          const res = await airwallexPay({
+            amount: form.amount / 100,
+            type: "charge",
+            payment_method: form.pay_type,
+          });
+          console.log("airwallexPay response:", res._rawValue);
+          if (
+            res._rawValue &&
+            res._rawValue.payment_intent_id &&
+            res._rawValue.client_secret
+          ) {
+            airwallexIntent.value = res._rawValue;
+            showAirwallexForm.value = true;
+            await nextTick();
+            await handleAirwallexPayment(res._rawValue);
+          } else {
+            console.error("Invalid airwallexPay response:", res._rawValue);
+            Message.error("Failed to retrieve payment intent data");
+            showAirwallexForm.value = false;
+          }
         } else {
           Message.error("未支持的支付方式");
         }
@@ -848,6 +1058,13 @@ const up_to_vip = async () => {
         break;
       default:
         if (isAirwallexMethod(form.pay_type)) {
+          console.log("Initiating Airwallex payment for VIP with:", {
+            v_id: vip_ids.value,
+            amount: vip_now_money.value,
+            type: "vip",
+            coupon: form.kami,
+            payment_method: form.pay_type,
+          });
           const res = await airwallexPay({
             v_id: vip_ids.value,
             amount: vip_now_money.value,
@@ -855,9 +1072,21 @@ const up_to_vip = async () => {
             coupon: form.kami,
             payment_method: form.pay_type,
           });
-          showAirwallexForm.value = true;
-          await nextTick();
-          await handleAirwallexPayment(res._rawValue);
+          console.log("airwallexPay response:", res._rawValue);
+          if (
+            res._rawValue &&
+            res._rawValue.payment_intent_id &&
+            res._rawValue.client_secret
+          ) {
+            airwallexIntent.value = res._rawValue;
+            showAirwallexForm.value = true;
+            await nextTick();
+            await handleAirwallexPayment(res._rawValue);
+          } else {
+            console.error("Invalid airwallexPay response:", res._rawValue);
+            Message.error("Failed to retrieve payment intent data");
+            showAirwallexForm.value = false;
+          }
         } else {
           Message.error("未支持的支付方式");
         }
@@ -923,6 +1152,10 @@ const changeRadio = (e: string) => {
 };
 
 const is_vipor_charge = () => {
+  console.log("is_vipor_charge called with:", {
+    activeName: activeName.value,
+    pay_type: form.pay_type,
+  });
   if (!form.pay_type) {
     Message.error("请选择支付方式");
     return;
@@ -961,11 +1194,14 @@ const handleClick = (tab: any) => {
   form.pay_type = "";
   setDefaultPayType();
 };
+
 const handleFinish = () => (pay_now_type.value = "time_out");
+
 const dialogm = () => {
   dialogFormVisible.value = false;
-  cleanupAirwallex();
+  if (!showAirwallexForm.value) cleanupAirwallex();
 };
+
 const changeLimitRadio = (e: string) => (form.limit_bag_id = e);
 </script>
 
@@ -976,13 +1212,20 @@ const changeLimitRadio = (e: string) => (form.limit_bag_id = e);
   border-radius: 8px;
   margin: 20px 0;
   min-height: 150px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Space between card fields and button */
 }
+
 .hidden {
   display: none;
 }
+
 .qr_fing {
   position: relative;
 }
+
 .pay_over {
   position: absolute;
   top: 0;
@@ -993,5 +1236,33 @@ const changeLimitRadio = (e: string) => (form.limit_bag_id = e);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.payment-actions {
+  margin-top: auto; /* Pushes the button to the bottom of the container */
+  padding-top: 10px;
+}
+
+.pay-button {
+  width: 100%; /* Full width of the container for a modern look */
+  padding: 12px 24px; /* Increased padding for a larger button */
+  background-color: #1890ff; /* Consistent with your design */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px; /* Larger text for readability */
+  font-weight: 500;
+  transition: background-color 0.3s ease; /* Smooth hover effect */
+}
+
+.pay-button:hover:not(:disabled) {
+  background-color: #40a9ff; /* Lighter shade on hover */
+}
+
+.pay-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+  opacity: 0.6; /* Subtle disabled state */
 }
 </style>

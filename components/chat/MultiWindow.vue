@@ -120,12 +120,46 @@ const validateModels = (models) => {
   return models.every((model) => model.model_key && model.model_name);
 };
 
+// const initializeMessages = (models) => {
+//   if (!state.currentSessionId) {
+//     state.currentSessionId =
+//       props.initialSessionId && props.initialSessionId !== "new"
+//         ? props.initialSessionId
+//         : null;
+//   }
+//   emit("update-session", state.currentSessionId);
+
+//   models.forEach((model) => {
+//     if (!state.messages[model.model_key]) {
+//       state.messages[model.model_key] = [
+//         {
+//           id: `init_${model.model_key}_${Date.now()}`,
+//           text: `Hello! I'm ${model.model_name}, how can I assist you?`,
+//           isUser: false,
+//           timestamp: new Date(),
+//           sessionId: state.currentSessionId,
+//         },
+//       ];
+//     } else {
+//       state.messages[model.model_key] = state.messages[model.model_key].map(
+//         (msg) => ({
+//           ...msg,
+//           sessionId: state.currentSessionId,
+//         })
+//       );
+//     }
+//   });
+// };
+
 const initializeMessages = (models) => {
-  if (!state.currentSessionId) {
-    state.currentSessionId =
-      props.initialSessionId && props.initialSessionId !== "new"
-        ? props.initialSessionId
-        : null;
+  if (
+    !state.currentSessionId &&
+    props.initialSessionId &&
+    props.initialSessionId !== "new"
+  ) {
+    state.currentSessionId = props.initialSessionId; // Use the passed initialSessionId
+  } else if (!state.currentSessionId) {
+    state.currentSessionId = null; // Ensure it's null if no valid ID
   }
   emit("update-session", state.currentSessionId);
 
@@ -150,7 +184,6 @@ const initializeMessages = (models) => {
     }
   });
 };
-
 const handleWebSocketMessage = (message) => {
   if (!isMounted.value) return;
   console.log("Received WebSocket message:", message);
@@ -261,14 +294,23 @@ const handleErrorResponse = (modelKey, errorText) => {
 
 const updateSession = (sessionId) => {
   if (!isMounted.value) return;
+  // Only update the session ID if the current one is null or "new"
   if (
     sessionId &&
-    sessionId !== state.currentSessionId &&
+    (!state.currentSessionId || state.currentSessionId === "new") &&
     sessionId !== "new"
   ) {
     state.currentSessionId = sessionId;
     emit("update-session", state.currentSessionId);
     emit("history-updated", state.currentSessionId);
+    console.log("Updated session ID to:", state.currentSessionId);
+  } else {
+    console.log(
+      "Session ID not updated. Current:",
+      state.currentSessionId,
+      "Received:",
+      sessionId
+    );
   }
 };
 
@@ -386,6 +428,8 @@ const sendMessage = async (
 
 const sendToModels = (text, imageUrls, sessionId) => {
   if (!isMounted.value) return;
+
+  console.log("Sending message to models with session ID:", sessionId);
 
   props.selectedModels.forEach((model) => {
     if (!state.messages[model.model_key]) state.messages[model.model_key] = [];
@@ -571,7 +615,13 @@ onMounted(async () => {
   if (props.initialSessionId && props.initialSessionId !== "new") {
     await loadHistory(props.initialSessionId);
   } else {
+    if (!state.currentSessionId) {
+      state.currentSessionId = await fetchNewSessionId();
+      emit("update-session", state.currentSessionId);
+    }
+    initializeMessages(props.selectedModels);
     isReady.value = true;
+    // isReady.value = true;
   }
   await nextTick();
   connectWebSocket();
