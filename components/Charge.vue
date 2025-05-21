@@ -918,6 +918,7 @@ const send_charge = async () => {
           amount: form.amount,
           type: "charge",
           pay_type: form.pay_type,
+          currency: "HKD",
         });
         window.open(cryptoRes._rawValue.qr_code, "_blank");
         dialogFormVisible.value = false;
@@ -925,16 +926,17 @@ const send_charge = async () => {
       default:
         if (isAirwallexMethod(form.pay_type)) {
           console.log("Initiating Airwallex payment with:", {
-            amount: form.amount / 100,
+            amount: form.amount,
             type: "charge",
             payment_method: form.pay_type,
+            currency: "HKD",
           });
 
-          const payamount = form.amount / 100;
           const res = await airwallexPay({
-            amount: form.amount / 100,
+            amount: form.amount,
             type: "charge",
             payment_method: form.pay_type,
+            currency: "HKD",
           });
           console.log("airwallexPay response:", res._rawValue);
           if (
