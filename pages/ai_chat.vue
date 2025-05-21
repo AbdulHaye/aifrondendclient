@@ -4045,9 +4045,34 @@ const add_knowledge = () => {
   knowledge_add.value = true;
   knowledge_list_get();
 };
-const handlePaymentSuccess = () => {
+const handlePaymentSuccess = async () => {
   console.log("handlePaymentSuccess triggered in ai_chat.vue");
-  get_limit(); // Refresh user data, including balance
+  let attempts = 0;
+  const maxAttempts = 5;
+  let previousMoney = user_info.value.money;
+
+  while (attempts < maxAttempts) {
+    await get_limit();
+    console.log(
+      "Balance after payment (attempt",
+      attempts + 1,
+      "):",
+      user_info.value.money
+    );
+    if (user_info.value.money !== previousMoney) {
+      console.log("Balance updated successfully");
+      break;
+    }
+    attempts++;
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait 1 second
+  }
+
+  if (attempts === maxAttempts) {
+    console.warn("Balance did not update after", maxAttempts, "attempts");
+    Message.warning("Balance may not have updated. Please refresh the page.");
+  }
+
+  dialogFormVisible.value = false;
 };
 const changeRadio = (ids: any) => {
   now_choose_knowledge.value = [];

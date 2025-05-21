@@ -561,10 +561,14 @@ watch(
   }
 );
 
+const user_info = ref({});
+
 const refreshUserInfo = async () => {
   try {
     const response = await get_user();
     console.log("User info refreshed:", response._rawValue.data);
+    user_info.value = response._rawValue.data;
+    console.log("Updated user_info:", user_info.value);
   } catch (error) {
     console.error("Failed to refresh user info:", error);
     Message.error("无法更新用户信息");
@@ -781,26 +785,24 @@ const confirmAirwallexPayment = async () => {
     console.log("Airwallex confirm result:", result);
     if (result.status === "SUCCEEDED") {
       Message.success("Payment successful!");
+      pay_now_type.value = "success"; // Ensure this is set
       handlePaymentSuccess();
-      // Reset Airwallex state to prevent re-confirmation
       cleanupAirwallex();
     } else if (result.status === "requires_action") {
       console.log("3DS authentication in progress, awaiting completion");
-      // SDK handles 3DS; rely on element's 'success' or 'error' events
+      // Wait for element's 'success' or 'error' events
     } else {
       Message.error("Payment failed: " + (result.message || "Unknown status"));
+      pay_now_type.value = "failed"; // Set status for UI
       confirmLoading.value = false;
     }
   } catch (error) {
-    console.error(
-      "Airwallex payment confirmation error:",
-      JSON.stringify(error, null, 2)
-    );
+    console.error("Airwallex payment confirmation error:", error);
+    pay_now_type.value = "failed"; // Set status for UI
     if (error.code === "invalid_status_for_operation") {
       Message.error(
         "Payment has already been processed or is in an invalid state. Please start a new payment."
       );
-      // Reset Airwallex state to allow a new payment
       cleanupAirwallex();
     } else if (error.code === "invalid_request_error") {
       Message.error("Invalid card details. Please check and try again.");
@@ -838,6 +840,7 @@ const startPaymentStatusCheck = (orderId: string, qrCode: string) => {
 };
 
 const handlePaymentSuccess = () => {
+  console.log("handlePaymentSuccess called");
   pay_now_type.value = "success";
   Message.success("支付成功");
   start.value = false;
